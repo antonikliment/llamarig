@@ -19,6 +19,7 @@ Building from source additionally requires Go (see `go.mod` for the minimum vers
 
 Prerelease archives are published for Linux and macOS on amd64 and arm64. Download the matching archive and `SHA256SUMS` from the [GitHub releases page](https://github.com/antonikliment/llamarig/releases), then verify it before extracting:
 
+
 ```bash
 # Linux
 grep ' llamarig_<version>_linux_<arch>.tar.gz$' SHA256SUMS | sha256sum --check
