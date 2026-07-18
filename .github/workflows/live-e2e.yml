@@ -1,0 +1,58 @@
+name: Live E2E
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E (live)
+    # Skip draft PRs.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # Cache the downloaded llama.cpp binary across runs.
+      - name: Cache llama.cpp
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/llamarig/e2e/llama.cpp
+          key: llama-cpp-e2e-${{ runner.os }}
+
+      # Build the web UI first: the Go build embeds webui/dist (see webui/assets.go).
+      - name: Build web UI
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.22.0 --activate
+          pnpm config set store-dir ~/.pnpm-store
+          cd webui
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Run live E2E
+        run: make e2e-live

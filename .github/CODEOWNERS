@@ -1,0 +1,17 @@
+# CODEOWNERS — changes to these paths require review from the listed owner.
+# Enforced on PRs to `main` when branch protection has
+# "Require review from Code Owners" enabled (see below).
+# Last matching pattern wins.
+
+# Release, CI and repo-infra files — locked to @antonikliment
+/.github/                 @antonikliment
+/scripts/package-release.sh @antonikliment
+/.gitignore               @antonikliment
+/.golangci.yml            @antonikliment
+/.custom-gcl.yml          @antonikliment
+/Makefile                 @antonikliment
+/buf.yaml                 @antonikliment
+/buf.gen.yaml             @antonikliment
+/go.mod                   @antonikliment
+/go.sum                   @antonikliment
+/LICENSE                  @antonikliment

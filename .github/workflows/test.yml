@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      # verify:web builds webui/dist, which the Go build embeds (see webui/assets.go).
+      - name: Verify web UI
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.22.0 --activate
+          pnpm config set store-dir ~/.pnpm-store
+          cd webui
+          pnpm install --frozen-lockfile
+          pnpm run verify:web
+
+      - name: Test
+        run: |
+          go mod download
+          make test
