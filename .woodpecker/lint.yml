@@ -1,0 +1,27 @@
+when:
+  - event: pull_request
+    branch: main
+  - event: push
+    branch: main
+
+steps:
+  webui-build:
+    image: node:24
+    volumes:
+      - /var/cache/llamarig/pnpm/store:/pnpm/store
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@10.22.0 --activate
+      - pnpm config set store-dir /pnpm/store
+      - cd webui
+      - pnpm install --frozen-lockfile
+      - pnpm run build
+
+  go-lint:
+    image: golang:1.26
+    volumes:
+      - /var/cache/llamarig/go/pkg/mod:/go/pkg/mod
+      - /var/cache/llamarig/go/build:/root/.cache/go-build
+    commands:
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+      - make lint-ci

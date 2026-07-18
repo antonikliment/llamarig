@@ -1,0 +1,7 @@
+# ADR 0009: TUI is the default entrypoint; startup services are user-configured
+
+Bare `llamarig` (and `go run .`) launches the **entrypoint TUI** instead of the foreground control daemon. New users had no visible entrypoint: the old default ran `serve`, a socket-only process with no GUI, while the README incorrectly implied it opened the web GUI. The TUI is now the front door, and `llamarig serve` / `llamarig gateway` remain explicit subcommands for users who want a single process directly.
+
+LlamaRig keeps both daemon processes — the control daemon (`serve`, Unix socket, RPC core API) and the web gateway (`gateway`, TCP, GUI/API/MCP) — rather than merging them. The split lets the control daemon run with no TCP exposure at all, and lets the web gateway be deployed or restarted independently. Setup now asks which of the two should start automatically (`startup_services`: `control`, `web`, or both), and the TUI auto-starts whichever configured service is down on launch, surfacing a footer notice. This is distinct from `runtime.autostart_servers`, which governs llama-server profiles, not LlamaRig services.
+
+The control-socket path and the control-client dialer were duplicated across `adapters/cli`, `adapters/tui`, and `core/rpc`. Both are now centralized: `config.ControlSocketPath()` is the single path definition, and `rpc.DialControl()` is the single client constructor; callers only vary the request timeout.

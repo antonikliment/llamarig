@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+message GetSignalsRequest {}
+
+message GetSignalsResponse {
+  bool ok = 1;
+  SignalsSnapshot signals = 2;
+}
+
+message SignalsSnapshot {
+  string captured_at = 1;
+  HostSnapshot host = 2;
+  MemorySnapshot memory = 3;
+  CPUSnapshot cpu = 4;
+  repeated GPUSnapshot gpu = 5;
+  repeated RuntimeProcessSnapshot runtime = 6;
+  repeated string warnings = 7;
+  repeated DiskSnapshot disks = 8;
+}
+
+message HostSnapshot {
+  string hostname = 1;
+  string os = 2;
+  string platform = 3;
+}
+
+message MemorySnapshot {
+  uint64 available_bytes = 1;
+  uint64 total_bytes = 2;
+  uint64 used_bytes = 3;
+  double used_percent = 4;
+}
+
+message DiskSnapshot {
+  string label = 1;
+  string path = 2;
+  uint64 total_bytes = 3;
+  uint64 free_bytes = 4;
+  uint64 used_bytes = 5;
+  double used_percent = 6;
+}
+
+message CPUSnapshot {
+  int32 logical_cores = 1;
+  double used_percent = 2;
+}
+
+message GPUSnapshot {
+  string name = 1;
+  string backend = 2;
+  uint64 total_vram_bytes = 3;
+  uint64 used_vram_bytes = 4;
+  double utilization_percent = 5;
+  string source = 6;
+  optional double temperature_celsius = 7;
+}
+
+message RuntimeProcessSnapshot {
+  string name = 1;
+  int64 pid = 2;
+  uint64 rss_bytes = 3;
+  double cpu_percent = 4;
+  string command = 5;
+}
+
+message ListEventsRequest {
+  reserved 1, 2;
+  reserved "limit", "after_id";
+}
+
+message ListEventsResponse {
+  bool ok = 1;
+  repeated Event events = 2;
+}
+
+message WatchEventsRequest {
+  string after_id = 1;
+}
+
+message Event {
+  reserved 3, 4, 10;
+  string id = 1;
+  string action = 2;
+  string time = 5;
+  bool success = 6;
+  string error_kind = 7;
+  string duration = 8;
+}

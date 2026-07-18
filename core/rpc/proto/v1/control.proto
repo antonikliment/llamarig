@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+import "v1/common.proto";
+import "v1/config.proto";
+import "v1/models.proto";
+import "v1/presets.proto";
+import "v1/runtime.proto";
+import "v1/signals.proto";
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+service ControlService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+
+  rpc GetRuntimeStatus(GetRuntimeStatusRequest) returns (GetRuntimeStatusResponse);
+  rpc GetRuntimeResources(GetRuntimeResourcesRequest) returns (GetRuntimeResourcesResponse);
+  rpc GetLlamaServerParams(GetLlamaServerParamsRequest) returns (GetLlamaServerParamsResponse);
+  rpc StartRuntime(RuntimeTargetRequest) returns (CommandResponse);
+  rpc StopRuntime(RuntimeTargetRequest) returns (CommandResponse);
+  rpc RestartRuntime(RuntimeTargetRequest) returns (CommandResponse);
+
+  rpc GetSignals(GetSignalsRequest) returns (GetSignalsResponse);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  rpc WatchEvents(WatchEventsRequest) returns (stream Event);
+
+  rpc GetConfig(GetConfigRequest) returns (TextDocumentResponse);
+  rpc ValidateConfig(ValidateTextDocumentRequest) returns (ValidationResponse);
+  rpc ReplaceConfig(ReplaceTextDocumentRequest) returns (MutationResponse);
+  rpc ListPresets(ListPresetsRequest) returns (ListPresetsResponse);
+  rpc GetPreset(GetPresetRequest) returns (PresetResponse);
+  rpc PutPreset(PutPresetRequest) returns (PresetResponse);
+  rpc DeletePreset(DeletePresetRequest) returns (MutationResponse);
+  rpc CleanupPreset(CleanupPresetRequest) returns (MutationResponse);
+  rpc SetPresetAutostart(PresetAutostartRequest) returns (MutationResponse);
+
+  rpc ResolveModel(ResolveModelRequest) returns (ResolveModelResponse);
+  rpc ListModelCatalog(ListModelCatalogRequest) returns (ListModelCatalogResponse);
+  rpc ListLocalModels(ListLocalModelsRequest) returns (ListLocalModelsResponse);
+  rpc DeleteLocalModel(DeleteLocalModelRequest) returns (MutationResponse);
+  rpc WatchModelCatalog(WatchModelCatalogRequest) returns (stream ModelCatalogEvent);
+
+  rpc StartModelDownload(StartModelDownloadRequest) returns (ModelDownloadResponse);
+  rpc GetModelDownload(GetModelDownloadRequest) returns (ModelDownloadResponse);
+  rpc CancelModelDownload(CancelModelDownloadRequest) returns (ModelDownloadResponse);
+  rpc ApplyModelDownloadToPreset(ApplyModelDownloadToPresetRequest) returns (MutationResponse);
+}

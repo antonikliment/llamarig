@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+message ResolveModelRequest {
+  string model = 1;
+  string url = 2;
+}
+
+message ResolveModelResponse {
+  reserved 2;
+  reserved "model";
+  bool ok = 1;
+  ModelResolution resolution = 3;
+}
+
+message ListModelCatalogRequest {
+  reserved 1;
+  reserved "query";
+  int32 limit = 2;
+  string sort = 3;
+  string search = 4;
+  string min_fit = 5;
+  string task = 6;
+  bool local_only = 7;
+}
+
+message ListModelCatalogResponse {
+  reserved 2;
+  bool ok = 1;
+  MachineProfile machine = 3;
+  repeated CatalogModel models = 4;
+  CacheState cache = 5;
+  repeated string errors = 6;
+}
+
+message ListLocalModelsRequest {}
+
+message DeleteLocalModelRequest {
+  string path = 1;
+  bool cascade_presets = 2;
+}
+
+message ListLocalModelsResponse {
+  bool ok = 1;
+  repeated LocalModel models = 2;
+}
+
+message LocalModel {
+  string path = 1;
+  string filename = 2;
+  int64 size_bytes = 3;
+  string modified_at = 4;
+  repeated string used_by_presets = 5;
+  repeated string model_path_presets = 6;
+  repeated string models_dir_presets = 7;
+}
+
+message ModelResolution {
+  bool ok = 1;
+  ModelSource source = 2;
+  LlamaCPPCompatibility llama_cpp = 3;
+  repeated ModelFile files = 4;
+  string description = 5;
+  int64 params = 6;
+  string architecture = 7;
+  int64 context_length = 8;
+  bool is_moe = 9;
+}
+
+message ModelSource {
+  string kind = 1;
+  string owner = 2;
+  string repo = 3;
+  string url = 4;
+}
+
+message LlamaCPPCompatibility {
+  bool compatible = 1;
+  string hf_ref = 2;
+  string reason = 3;
+}
+
+message ModelFile {
+  string filename = 1;
+  string quant = 2;
+  int64 size_bytes = 3;
+  bool downloadable = 4;
+  string local_path = 5;
+  bool exists = 6;
+  int64 estimated_ram_bytes = 7;
+  int64 estimated_vram_bytes = 8;
+  string fit_level = 9;
+  string fit_reason = 10;
+}
+
+message MachineProfile {
+  int64 total_ram_bytes = 1;
+  int64 available_ram_bytes = 2;
+  string gpu_name = 3;
+  int64 vram_bytes = 4;
+  bool has_gpu = 5;
+}
+
+message MachineFit {
+  string level = 1;
+  string reason = 2;
+  int64 required_ram_bytes = 3;
+  int64 available_ram_bytes = 4;
+  int64 required_vram_bytes = 5;
+  int64 available_vram_bytes = 6;
+}
+
+message CatalogModel {
+  string id = 1;
+  string owner = 2;
+  string repo = 3;
+  string url = 4;
+  int64 downloads = 5;
+  int64 likes = 6;
+  string last_modified = 7;
+  repeated string tags = 8;
+  string license = 9;
+  repeated ModelFile files = 10;
+  ModelFile best_file = 11;
+  MachineFit fit = 12;
+  double score = 13;
+  int64 params = 14;
+  string architecture = 15;
+  int64 context_length = 16;
+  bool is_moe = 17;
+}
+
+message CacheState {
+  bool hit = 1;
+  bool stale = 2;
+  bool refreshing = 3;
+  string updated_at = 4;
+  int64 ttl_seconds = 5;
+}
+
+message WatchModelCatalogRequest {}
+
+message ModelCatalogEvent {
+  reserved 2, 3;
+  string type = 1;
+  bool ok = 4;
+  string error = 5;
+}
+
+message StartModelDownloadRequest {
+  reserved 1, 2;
+  reserved "model", "target_profile";
+  string url = 3;
+  string filename = 4;
+  bool force = 5;
+}
+
+message GetModelDownloadRequest {
+  string id = 1;
+}
+
+message CancelModelDownloadRequest {
+  string id = 1;
+}
+
+message ModelDownloadResponse {
+  bool ok = 1;
+  ModelDownload download = 2;
+}
+
+message ModelDownload {
+  reserved 2, 6;
+  string id = 1;
+  string state = 3;
+  uint64 received_bytes = 4;
+  uint64 total_bytes = 5;
+  string error = 7;
+  string url = 8;
+  string filename = 9;
+  string target_path = 10;
+  double percent = 11;
+  string started_at = 12;
+  string completed_at = 13;
+}
+
+message ApplyModelDownloadToPresetRequest {
+  reserved 3;
+  reserved "restart";
+  string id = 1;
+  string preset = 2;
+  bool preview = 4;
+}

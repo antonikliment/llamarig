@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LlamaRig dashboard explorations</title>
+  <style>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #182331;
+      background: #e9edf0;
+    }
+    button, input { font: inherit; }
+    .gallery-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      border-bottom: 1px solid #cfd6dc;
+      background: rgba(245, 247, 248, .92);
+      backdrop-filter: blur(14px);
+    }
+    .gallery-nav strong { margin-right: auto; font-size: 14px; }
+    .gallery-nav a {
+      padding: 7px 11px;
+      border: 1px solid #cbd3da;
+      border-radius: 999px;
+      color: #4b5b69;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .gallery-nav a:hover { color: #087f74; border-color: #8fcfc8; }
+    .exploration {
+      width: min(1520px, calc(100vw - 32px));
+      min-height: 920px;
+      margin: 32px auto;
+      overflow: hidden;
+      border: 1px solid rgba(28, 43, 56, .14);
+      border-radius: 18px;
+      box-shadow: 0 24px 70px rgba(21, 34, 44, .15);
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* shared primitives */
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .dot.live { box-shadow: 0 0 0 5px rgba(43, 190, 135, .14); }
+    .eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 800; }
+    .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    .muted { opacity: .68; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 36px;
+      padding: 0 13px;
+      border: 1px solid currentColor;
+      border-radius: 8px;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .spark {
+      position: relative;
+      height: 30px;
+      overflow: hidden;
+      opacity: .95;
+    }
+    .spark::before {
+      content: "";
+      position: absolute;
+      inset: 5px 0 2px;
+      background: currentColor;
+      clip-path: polygon(0 78%, 12% 61%, 24% 64%, 36% 43%, 49% 46%, 61% 30%, 74% 35%, 86% 14%, 100% 18%, 100% 100%, 0 100%);
+      opacity: .14;
+    }
+    .spark::after {
+      content: "";
+      position: absolute;
+      inset: 4px 0 6px;
+      background: currentColor;
+      clip-path: polygon(0 72%, 12% 58%, 24% 61%, 36% 39%, 49% 42%, 61% 26%, 74% 31%, 86% 10%, 100% 14%, 100% 20%, 86% 16%, 74% 37%, 61% 32%, 49% 48%, 36% 45%, 24% 67%, 12% 64%, 0 78%);
+    }
+    .area-chart {
+      position: relative;
+      min-height: 250px;
+      overflow: hidden;
+      border-top: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+    }
+    .area-chart::before {
+      content: "";
+      position: absolute;
+      inset: 22px 0 0;
+      background: currentColor;
+      clip-path: polygon(0 78%, 9% 74%, 18% 66%, 29% 62%, 41% 51%, 53% 48%, 66% 34%, 77% 25%, 89% 18%, 100% 13%, 100% 100%, 0 100%);
+      opacity: .16;
+    }
+    .area-chart::after {
+      content: "";
+      position: absolute;
+      inset: 20px 0 0;
+      background: currentColor;
+      clip-path: polygon(0 77%, 9% 73%, 18% 65%, 29% 61%, 41% 50%, 53% 47%, 66% 33%, 77% 24%, 89% 17%, 100% 12%, 100% 14%, 89% 19%, 77% 26%, 66% 35%, 53% 49%, 41% 52%, 29% 63%, 18% 67%, 9% 75%, 0 79%);
+    }
+    .grid-lines {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(to bottom, transparent 24%, currentColor 25%, transparent 26%, transparent 49%, currentColor 50%, transparent 51%, transparent 74%, currentColor 75%, transparent 76%);
+      opacity: .08;
+    }
+
+    /* 04 — signal desk */
+    .signal {
+      color: #e7f1f4;
+      background: #0a141b;
+      --panel: #101f29;
+      --line: #29404d;
+      --teal: #49d4c4;
+      --blue: #5fb7ff;
+      --violet: #a994ff;
+      --green: #5bd296;
+      --amber: #ffc35f;
+    }
+    .signal-topbar {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--line);
+      background: #081219;
+    }
+    .signal-brand { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+    .signal-mark { width: 29px; height: 29px; border-radius: 8px; background: var(--teal); box-shadow: inset 0 0 0 7px rgba(0,0,0,.12); }
+    .signal-statuses { display: flex; gap: 10px; }
+    .signal-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 11px;
+      border: 1px solid #29404d;
+      border-radius: 999px;
+      color: #a9bdc8;
+      background: #0e1b24;
+      font-size: 11px;
+      letter-spacing: .05em;
+    }
+    .signal-pill b { color: #e7f1f4; }
+    .signal-clock { margin-left: auto; color: #91a8b5; font-size: 12px; }
+    .signal-shell { display: grid; grid-template-columns: 62px 1fr; min-height: 862px; }
+    .signal-rail { border-right: 1px solid var(--line); background: #09141b; padding: 14px 10px; }
+    .rail-item {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      margin-bottom: 9px;
+      border-radius: 9px;
+      color: #88a0ad;
+      font-size: 18px;
+    }
+    .rail-item.active { color: var(--teal); background: rgba(73, 212, 196, .12); box-shadow: inset 3px 0 0 var(--teal); }
+    .signal-main { padding: 16px 18px 20px; }
+    .signal-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .signal-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+    }
+    .signal-metric { padding: 15px 18px; min-height: 102px; }
+    .signal-metric .eyebrow { color: #83a0af; }
+    .signal-number { margin-top: 6px; font-size: 28px; font-weight: 850; line-height: 1; }
+    .signal-number small { font-size: 13px; color: #90a8b5; font-weight: 600; }
+    .signal-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, .95fr); gap: 12px; margin-top: 12px; }
+    .signal-chart-card { min-height: 516px; padding: 16px; }
+    .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .signal-legend { display: flex; gap: 14px; color: #96abb6; font-size: 11px; }
+    .signal-legend span::before { content: ""; display: inline-block; width: 10px; height: 3px; margin-right: 6px; border-radius: 3px; background: currentColor; vertical-align: middle; }
+    .signal-chart { color: var(--teal); margin-top: 10px; min-height: 402px; border-color: #243946; }
+    .chart-axis { position: absolute; inset: 14px auto 14px 8px; display: flex; flex-direction: column; justify-content: space-between; color: #74909f; font-size: 10px; }
+    .signal-side { display: grid; gap: 12px; }
+    .signal-side .signal-card { padding: 16px; }
+    .ring-row { display: flex; align-items: center; gap: 24px; min-height: 164px; }
+    .ring {
+      --value: 55deg;
+      width: 108px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--teal) 0 55%, #263a46 55% 100%);
+      position: relative;
+    }
+    .ring::after { content: ""; position: absolute; inset: 11px; border-radius: 50%; background: var(--panel); }
+    .ring strong { position: relative; z-index: 1; font-size: 25px; }
+    .ring span { position: absolute; z-index: 1; transform: translateY(24px); color: #8da3b0; font-size: 9px; }
+    .temp-bar { height: 8px; margin-top: 13px; border-radius: 999px; background: linear-gradient(90deg, #3bb381, #8ed784 52%, #e9c563 70%, #e06b69); position: relative; }
+    .temp-bar::after { content: ""; position: absolute; left: 61%; top: -5px; width: 3px; height: 18px; border-radius: 4px; background: #edf4f6; box-shadow: 0 0 8px #fff; }
+    .process { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 0; border-top: 1px solid #263945; font-size: 12px; }
+    .signal-bottom { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, .95fr); gap: 12px; margin-top: 12px; }
+    .preset-control, .event-stream { padding: 16px; min-height: 194px; }
+    .preset-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; padding: 13px 14px; margin-top: 10px; border: 1px solid #2a414e; border-radius: 10px; background: #12232e; }
+    .state-chip { padding: 5px 8px; border: 1px solid rgba(91, 210, 150, .45); border-radius: 5px; color: var(--green); font-size: 10px; letter-spacing: .08em; }
+    .event { display: grid; grid-template-columns: 70px 42px 1fr auto; gap: 8px; padding: 7px 0; color: #afc1ca; font-size: 11px; }
+    .ok { color: var(--green); }
+    .warn { color: var(--amber); }
+
+    /* 05 — editorial console */
+    .editorial {
+      color: #182533;
+      background: #f7f9f8;
+      --teal: #078b7f;
+      --green: #22a96b;
+      --line: #dce4e3;
+      --soft: #eef4f2;
+    }
+    .editorial-header { height: 72px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 34px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.7); }
+    .editorial-logo { display: flex; align-items: center; gap: 10px; font-weight: 900; }
+    .editorial-logo i { width: 28px; height: 28px; border-radius: 7px; background: var(--teal); }
+    .editorial-nav { display: flex; align-self: stretch; gap: 28px; }
+    .editorial-nav span { display: flex; align-items: center; border-bottom: 2px solid transparent; color: #647582; font-size: 14px; }
+    .editorial-nav .active { color: #15202b; border-color: var(--teal); font-weight: 800; }
+    .editorial-actions { justify-self: end; display: flex; gap: 16px; color: #657782; }
+    .editorial-main { width: min(980px, calc(100% - 48px)); margin: 52px auto 70px; }
+    .hero-status { display: flex; align-items: center; gap: 17px; }
+    .hero-status .dot { width: 16px; height: 16px; color: var(--green); box-shadow: 0 0 0 6px rgba(34,169,107,.16); }
+    .hero-status h1 { margin: 0; font-size: clamp(34px, 4vw, 50px); line-height: 1.08; letter-spacing: -.035em; }
+    .hero-copy { margin: 10px 0 26px 35px; color: #627482; font-size: 17px; }
+    .hero-copy b { color: #182533; }
+    .command {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      height: 56px;
+      padding: 0 16px;
+      border: 1px solid #d9e2e1;
+      border-radius: 13px;
+      background: #fff;
+      box-shadow: 0 12px 28px rgba(31, 56, 62, .08);
+      color: #607482;
+      font-size: 14px;
+    }
+    .command kbd { margin-left: auto; padding: 4px 7px; border: 1px solid #dae3e2; border-radius: 6px; background: #f6f9f8; font-size: 11px; }
+    .editorial-metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 28px; }
+    .editorial-metric { padding: 6px 28px; border-left: 1px solid var(--line); }
+    .editorial-metric:first-child { padding-left: 0; border-left: 0; }
+    .editorial-metric:last-child { padding-right: 0; }
+    .editorial-metric label { color: #627482; font-size: 12px; font-weight: 700; }
+    .editorial-metric strong { display: inline-block; margin-top: 5px; font-size: 31px; }
+    .editorial-metric small { margin-left: 7px; color: #61727f; font-size: 12px; }
+    .editorial-metric .spark { color: var(--teal); margin-top: 10px; }
+    .section-label { margin: 31px 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); color: #61727f; text-transform: uppercase; letter-spacing: .16em; font-size: 11px; font-weight: 850; }
+    .running-row { display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 18px; min-height: 62px; border-bottom: 1px solid var(--line); }
+    .running-badge { padding: 5px 10px; border-radius: 999px; color: var(--green); background: rgba(34,169,107,.12); font-size: 11px; font-weight: 800; }
+    .running-row strong { font-size: 18px; }
+    .running-row .meta { color: #687a86; font-size: 13px; }
+    .link-button { border: 0; background: transparent; font-weight: 800; color: #1e2b35; }
+    .link-button.danger { color: #d33c34; }
+    .trend-tabs { display: flex; gap: 12px; margin-bottom: 18px; }
+    .trend-tabs span { padding: 8px 15px; border-radius: 999px; color: #60737f; font-size: 13px; }
+    .trend-tabs .active { color: var(--teal); background: #e1f2ef; font-weight: 800; }
+    .editorial-chart { color: var(--teal); min-height: 224px; border-color: #e5ebe9; }
+    .chart-times { display: flex; justify-content: space-between; color: #94a1a8; font-size: 9px; margin-top: 4px; }
+    .activity-row { display: grid; grid-template-columns: 78px 15px 1fr auto; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+
+    /* 06 — hardware studio */
+    .hardware {
+      color: #edf1f6;
+      background: radial-gradient(circle at 12% 0%, #132a2b, transparent 35%), #0e151e;
+      --panel: rgba(25, 34, 45, .88);
+      --line: #2c3948;
+      --teal: #55d1c2;
+      --blue: #66b7ef;
+      --violet: #ab8df5;
+      --amber: #f1be56;
+    }
+    .hardware-main { padding: 32px 38px; }
+    .hardware-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+    .hardware-heading p { margin: 0 0 6px; color: #9baabd; font-size: 13px; }
+    .hardware-heading h1 { margin: 0; font-size: 33px; letter-spacing: -.03em; }
+    .hardware-tools { display: flex; gap: 10px; color: #aab7c7; }
+    .hardware-board { display: grid; grid-template-columns: 1.25fr .62fr .62fr; grid-template-rows: 214px 214px; gap: 14px; }
+    .hw-card { border: 1px solid var(--line); border-radius: 20px; background: var(--panel); box-shadow: inset 0 1px 0 rgba(255,255,255,.025); }
+    .gpu-hero { grid-row: 1 / 3; padding: 25px; background: linear-gradient(145deg, rgba(29,71,72,.72), rgba(18,28,38,.92)); position: relative; overflow: hidden; }
+    .gpu-hero::after { content: ""; position: absolute; inset: 62% 0 0; background: linear-gradient(to top, rgba(85,209,194,.13), transparent); }
+    .hw-title { display: flex; align-items: center; justify-content: space-between; }
+    .hw-title h2 { margin: 0; font-size: 18px; }
+    .tag { padding: 4px 7px; border: 1px solid rgba(85,209,194,.55); border-radius: 5px; color: var(--teal); font-size: 10px; }
+    .gpu-center { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 32px; margin-top: 30px; }
+    .gpu-ring { width: 150px; background: conic-gradient(var(--teal) 0 79%, #354b52 79% 100%); }
+    .gpu-ring::after { background: #173035; inset: 13px; }
+    .gpu-ring strong { font-size: 34px; }
+    .gpu-ring span { transform: translateY(31px); font-size: 10px; }
+    .bar-line { margin: 20px 0; }
+    .bar-line label { display: flex; justify-content: space-between; color: #a9b7c4; font-size: 12px; }
+    .bar-track { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #2b3e49; }
+    .bar-track i { display: block; width: 56%; height: 100%; border-radius: inherit; background: var(--teal); }
+    .bar-track.blue i { width: 72%; background: var(--blue); }
+    .gpu-spark { position: absolute; left: 24px; right: 24px; bottom: 22px; color: var(--teal); height: 80px; z-index: 2; }
+    .hw-stat { padding: 24px; }
+    .hw-stat .eyebrow { color: #9cabc0; }
+    .hw-stat strong { display: block; margin-top: 16px; font-size: 34px; }
+    .hw-stat p { margin: 7px 0 0; color: #9daabd; font-size: 13px; }
+    .runtime-card { background: linear-gradient(145deg, rgba(36,74,62,.48), rgba(26,35,44,.9)); }
+    .memory-card { background: linear-gradient(145deg, rgba(66,57,99,.4), rgba(26,35,44,.9)); }
+    .models-card { background: linear-gradient(145deg, rgba(82,67,38,.34), rgba(26,35,44,.9)); }
+    .telemetry-card { background: linear-gradient(145deg, rgba(40,71,94,.4), rgba(26,35,44,.9)); }
+    .mini-ring { float: right; width: 60px; aspect-ratio: 1; border-radius: 50%; background: conic-gradient(var(--violet) 0 48%, #313b4b 48% 100%); position: relative; }
+    .mini-ring::after { content: "48%"; position: absolute; inset: 7px; display: grid; place-items: center; border-radius: 50%; background: #1d2532; font-size: 10px; }
+    .hardware-bottom { display: grid; grid-template-columns: 1.02fr .98fr; gap: 14px; margin-top: 14px; }
+    .preset-card, .activity-card { padding: 22px; min-height: 188px; }
+    .preset-tile { display: inline-grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; min-width: 47%; padding: 13px 14px; margin: 13px 8px 0 0; border: 1px solid #354455; border-radius: 12px; background: #1a2430; }
+    .preset-tile.active { border-color: rgba(85,209,194,.62); background: rgba(38,82,81,.4); }
+    .activity-line { display: grid; grid-template-columns: 72px 12px 1fr auto; gap: 10px; padding: 8px 0; border-top: 1px solid #2c3948; color: #a7b6c6; font-size: 11px; }
+
+    /* 07 — calm operations */
+    .calm {
+      color: #20313c;
+      background: #edf3f0;
+      --ink: #20313c;
+      --muted: #6e7e83;
+      --teal: #117d72;
+      --green: #37a674;
+      --line: #d7e0dc;
+      --panel: #f9fbfa;
+      --nav: #163f3a;
+    }
+    .calm-shell { display: grid; grid-template-columns: 224px 1fr; min-height: 920px; }
+    .calm-sidebar { padding: 26px 18px; color: #dff2ec; background: var(--nav); }
+    .calm-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 26px; font-weight: 900; }
+    .calm-brand i { width: 30px; height: 30px; border-radius: 10px; background: #57c7b2; }
+    .calm-nav small { display: block; padding: 0 10px 10px; color: #86aaa2; text-transform: uppercase; letter-spacing: .13em; font-size: 9px; font-weight: 800; }
+    .calm-nav div { padding: 11px 12px; margin-bottom: 5px; border-radius: 9px; color: #a9c7c0; font-size: 13px; }
+    .calm-nav .active { color: #fff; background: rgba(255,255,255,.1); box-shadow: inset 3px 0 0 #6ad6c1; }
+    .calm-sidebar-footer { margin-top: 470px; padding: 14px 10px; border-top: 1px solid rgba(255,255,255,.12); color: #a9c7c0; font-size: 11px; }
+    .calm-main { padding: 27px 32px 40px; }
+    .calm-top { display: flex; align-items: center; justify-content: space-between; }
+    .calm-top h1 { margin: 4px 0 0; font-size: 31px; letter-spacing: -.025em; }
+    .calm-top .eyebrow { color: var(--muted); }
+    .calm-actions { display: flex; gap: 10px; color: #52666f; }
+    .calm-health { display: grid; grid-template-columns: 1.4fr repeat(3, .62fr); gap: 12px; margin-top: 24px; }
+    .calm-card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 8px 20px rgba(49,78,69,.045); }
+    .health-card { padding: 20px 22px; background: linear-gradient(120deg, #f9fbfa, #edf7f3); }
+    .health-card h2 { display: flex; align-items: center; gap: 12px; margin: 4px 0 7px; font-size: 24px; }
+    .health-card p { margin: 0; color: var(--muted); font-size: 12px; }
+    .calm-metric { padding: 19px; }
+    .calm-metric label { color: var(--muted); font-size: 11px; font-weight: 750; }
+    .calm-metric strong { display: block; margin-top: 7px; font-size: 28px; }
+    .calm-content { display: grid; grid-template-columns: 1.32fr .68fr; gap: 12px; margin-top: 12px; }
+    .calm-chart-card { padding: 20px; min-height: 398px; }
+    .calm-chart-card h3, .calm-stack h3, .calm-presets h3 { margin: 0; font-size: 15px; }
+    .calm-tabs { display: flex; gap: 8px; margin: 18px 0 12px; }
+    .calm-tabs span { padding: 6px 10px; border-radius: 7px; color: var(--muted); font-size: 11px; }
+    .calm-tabs .active { color: var(--teal); background: #e2f2ed; font-weight: 800; }
+    .calm-chart { color: var(--teal); min-height: 270px; border-color: #e0e8e4; }
+    .calm-stack { display: grid; gap: 12px; }
+    .resource-card { padding: 18px; min-height: 193px; }
+    .resource-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 16px; font-size: 12px; }
+    .resource-bar { grid-column: 1 / -1; height: 7px; border-radius: 999px; background: #e1e8e4; overflow: hidden; }
+    .resource-bar i { display: block; height: 100%; width: 68%; background: var(--teal); border-radius: inherit; }
+    .resource-bar.memory i { width: 48%; background: #8d79db; }
+    .event-card { padding: 18px; }
+    .calm-event { display: grid; grid-template-columns: 8px 1fr auto; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 11px; }
+    .calm-event:first-of-type { margin-top: 10px; }
+    .calm-presets { padding: 20px; margin-top: 12px; }
+    .calm-preset-row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 13px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .calm-preset-row:last-child { border-bottom: 0; }
+    .calm-preset-row p { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+
+    @media (max-width: 1000px) {
+      .exploration { width: calc(100vw - 16px); margin: 16px auto; border-radius: 12px; }
+      .gallery-nav { overflow-x: auto; }
+      .signal-metrics, .editorial-metrics, .calm-health { grid-template-columns: repeat(2, 1fr); }
+      .signal-layout, .signal-bottom, .hardware-bottom, .calm-content { grid-template-columns: 1fr; }
+      .hardware-board { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
+      .gpu-hero { grid-column: 1 / -1; grid-row: auto; min-height: 430px; }
+      .calm-shell { grid-template-columns: 76px 1fr; }
+      .calm-sidebar { padding-inline: 10px; }
+      .calm-brand span, .calm-nav small, .calm-nav div span, .calm-sidebar-footer { display: none; }
+      .calm-nav div { text-align: center; }
+      .editorial-header { grid-template-columns: auto 1fr auto; padding-inline: 18px; }
+      .editorial-nav { justify-content: center; gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="gallery-nav" aria-label="Exploration index">
+    <strong>LlamaRig dashboard mock explorations</strong>
+    <a href="#signal">04 Signal desk</a>
+    <a href="#editorial">05 Editorial console</a>
+    <a href="#hardware">06 Hardware studio</a>
+    <a href="#calm">07 Calm operations</a>
+  </nav>
+
+  <section class="exploration signal" id="signal" aria-labelledby="signal-title">
+    <header class="signal-topbar">
+      <div class="signal-brand"><span class="signal-mark"></span><span>LlamaRig</span><span class="eyebrow muted">signal desk</span></div>
+      <div class="signal-statuses">
+        <span class="signal-pill"><i class="dot live ok"></i> Runtime <b>OK</b></span>
+        <span class="signal-pill"><i class="dot live ok"></i> Gateway <b>OK</b></span>
+        <span class="signal-pill"><i class="dot" style="color:var(--teal)"></i> Telemetry <b>LIVE · 5s</b></span>
+      </div>
+      <div class="signal-clock mono">RTX 4090&nbsp; <b>79%</b> · 62°C &nbsp;&nbsp; 06:12:45</div>
+    </header>
+    <div class="signal-shell">
+      <aside class="signal-rail" aria-label="Primary navigation">
+        <div class="rail-item active">▦</div><div class="rail-item">≡</div><div class="rail-item">◫</div><div class="rail-item">≣</div>
+      </aside>
+      <main class="signal-main">
+        <h1 id="signal-title" class="sr-only">Signal desk dashboard exploration</h1>
+        <div class="signal-metrics">
+          <article class="signal-card signal-metric"><div class="eyebrow">Uptime</div><div class="signal-number mono">3d 14h</div><div class="muted" style="font-size:11px;margin-top:9px">since last restart</div></article>
+          <article class="signal-card signal-metric"><div class="eyebrow">Active presets</div><div class="signal-number mono">1 <small>/ 2</small></div><div class="muted" style="font-size:11px;margin-top:9px">default · qwen2.5-coder-7b</div></article>
+          <article class="signal-card signal-metric"><div class="eyebrow">Local models</div><div class="signal-number mono">4</div><div class="muted" style="font-size:11px;margin-top:9px">14.8 GB on disk</div></article>
+          <article class="signal-card signal-metric"><div class="eyebrow">Sample age</div><div class="signal-number mono">4.2<small>s</small></div><div class="muted" style="font-size:11px;margin-top:9px">next poll in 0.8s</div></article>
+        </div>
+        <div class="signal-layout">
+          <article class="signal-card signal-chart-card">
+            <div class="card-heading"><div class="eyebrow" style="color:#91a9b6">Telemetry — last 5 minutes</div><div class="signal-legend"><span style="color:var(--teal)">GPU 79%</span><span style="color:var(--blue)">CPU 31%</span><span style="color:var(--violet)">MEM 48%</span></div></div>
+            <div class="area-chart signal-chart"><div class="grid-lines"></div><div class="chart-axis mono"><span>100</span><span>75</span><span>50</span><span>25</span></div></div>
+          </article>
+          <div class="signal-side">
+            <article class="signal-card"><div class="ring-row"><div class="ring"><strong class="mono">55%</strong><span>VRAM</span></div><div><div class="eyebrow" style="color:#86a0af">VRAM</div><div class="signal-number mono">13.1 GB</div><p class="muted" style="font-size:11px">of 24.0 GB · 10.9 GB free</p></div></div></article>
+            <article class="signal-card"><div class="card-heading"><span class="eyebrow" style="color:#86a0af">GPU temp</span><strong class="mono" style="font-size:25px">62°C</strong></div><div class="temp-bar"></div><div class="card-heading mono muted" style="font-size:9px;margin-top:8px"><span>30</span><span>60</span><span>90</span></div></article>
+            <article class="signal-card"><div class="eyebrow" style="color:#86a0af">Processes</div><div class="process mono"><span>router</span><span class="muted">7.6 GB · 23%</span></div><div class="process mono"><span>llama-server</span><span class="muted">5.1 GB · 41%</span></div><div class="process mono"><span>gateway</span><span class="muted">96 MB · 1%</span></div></article>
+          </div>
+        </div>
+        <div class="signal-bottom">
+          <article class="signal-card preset-control"><div class="eyebrow" style="color:#86a0af">Preset control</div><div class="preset-row"><span class="state-chip mono">RUNNING</span><strong>default</strong><span class="muted mono" style="font-size:11px">qwen2.5-coder-7b.gguf · ctx 8192 · up 3h 12m</span><div><button class="button" style="color:#cad7dd">Restart</button> <button class="button" style="color:#ef6b68">Stop</button></div></div><div class="preset-row"><span class="state-chip mono" style="color:#8299a6;border-color:#405360">IDLE</span><strong>llama3-8b</strong><span class="muted mono" style="font-size:11px">llama-3-8b.gguf</span><button class="button" style="color:#08151b;background:var(--teal);border-color:var(--teal)">Start</button></div></article>
+          <article class="signal-card event-stream"><div class="eyebrow" style="color:#86a0af">Event stream</div><div class="event mono"><span>06:12:02</span><b class="ok">OK</b><span>runtime.start</span><span>1.2s</span></div><div class="event mono"><span>06:05:44</span><b class="ok">OK</b><span>models.download</span><span>34s</span></div><div class="event mono"><span>05:58:31</span><b class="warn">TMO</b><span>models.resolve</span><span>10s</span></div><div class="event mono"><span>05:51:19</span><b class="ok">OK</b><span>presets.save</span><span>220ms</span></div></article>
+        </div>
+      </main>
+    </div>
+  </section>
+
+  <section class="exploration editorial" id="editorial" aria-labelledby="editorial-title">
+    <header class="editorial-header">
+      <div class="editorial-logo"><i></i><span>LlamaRig</span></div>
+      <nav class="editorial-nav" aria-label="Dashboard sections"><span class="active">Dashboard</span><span>Presets</span><span>Models</span><span>Logs</span></nav>
+      <div class="editorial-actions"><span>⚙</span><span>◐</span><span style="width:28px;height:28px;border-radius:50%;background:#1d9d91"></span></div>
+    </header>
+    <main class="editorial-main">
+      <div class="hero-status"><span class="dot live"></span><h1 id="editorial-title">Everything is running smoothly.</h1></div>
+      <p class="hero-copy"><b>default</b> is serving qwen2.5-coder-7b · 1 of 2 presets active · telemetry sampled 4 seconds ago</p>
+      <div class="command"><span>⌕</span><span>Search models, run a preset, or jump to logs…</span><kbd>⌘K</kbd></div>
+      <div class="editorial-metrics">
+        <article class="editorial-metric"><label>CPU</label><div><strong>31%</strong><small>16 cores</small></div><div class="spark"></div></article>
+        <article class="editorial-metric"><label>Memory</label><div><strong>48%</strong><small>16.8 GB free</small></div><div class="spark"></div></article>
+        <article class="editorial-metric"><label>GPU</label><div><strong>79%</strong><small>RTX 4090</small></div><div class="spark"></div></article>
+        <article class="editorial-metric"><label>VRAM</label><div><strong>13.1</strong><small>/ 24 GB</small></div><div class="spark"></div></article>
+      </div>
+      <div class="section-label">Running now</div>
+      <div class="running-row"><span class="running-badge">● Running</span><strong>default</strong><span class="meta">qwen2.5-coder-7b · ctx 8192 · up 3h 12m</span><button class="link-button">Restart</button><button class="link-button danger">Stop</button></div>
+      <div class="section-label">Last five minutes</div>
+      <div class="trend-tabs"><span class="active">GPU</span><span>CPU</span><span>Memory</span><span>VRAM</span><span>Temperature</span></div>
+      <div class="area-chart editorial-chart"><div class="grid-lines"></div></div>
+      <div class="chart-times mono"><span>06:07</span><span>06:10</span><span>06:12</span></div>
+      <div class="section-label">Recent activity</div>
+      <div class="activity-row mono"><span class="muted">06:12:02</span><span class="dot ok"></span><strong>runtime.start</strong><span class="muted">1.2s</span></div>
+      <div class="activity-row mono"><span class="muted">06:05:44</span><span class="dot ok"></span><strong>models.download</strong><span class="muted">34s</span></div>
+    </main>
+  </section>
+
+  <section class="exploration hardware" id="hardware" aria-labelledby="hardware-title">
+    <main class="hardware-main">
+      <header class="hardware-heading"><div><p>Saturday, July 12 · rig-01</p><h1 id="hardware-title">Hardware studio</h1></div><div class="hardware-tools"><button class="button">Customize layout</button><button class="button">⌘K</button></div></header>
+      <div class="hardware-board">
+        <article class="hw-card gpu-hero"><div class="hw-title"><h2>NVIDIA RTX 4090 &nbsp;<span class="tag mono">CUDA</span></h2><span class="mono">62°C</span></div><div class="gpu-center"><div class="ring gpu-ring"><strong class="mono">79%</strong><span>UTILIZATION</span></div><div><div class="bar-line"><label><span>VRAM</span><b class="mono">13.1 / 24.0 GB</b></label><div class="bar-track"><i></i></div></div><div class="bar-line"><label><span>Power</span><b class="mono">287 W</b></label><div class="bar-track blue"><i></i></div></div></div></div><div class="spark gpu-spark"></div></article>
+        <article class="hw-card hw-stat runtime-card"><div class="eyebrow">Runtime</div><strong><span class="dot live" style="color:#61d49a"></span> Running</strong><p>1 preset active · up 3h 12m</p></article>
+        <article class="hw-card hw-stat memory-card"><div class="mini-ring"></div><div class="eyebrow">Memory</div><strong>16.8 GB</strong><p>free of 32 GB</p></article>
+        <article class="hw-card hw-stat models-card"><div class="eyebrow">Local models</div><strong>4</strong><p><b style="color:#edf1f6">qwen2.5-coder-7b</b> &nbsp; 3.9 GB</p><p><b style="color:#edf1f6">llama-3-8b</b> &nbsp; 4.3 GB</p><p style="color:var(--amber);font-weight:800">Browse catalog →</p></article>
+        <article class="hw-card hw-stat telemetry-card"><div class="eyebrow">Telemetry</div><strong style="color:#6abaff">● Live</strong><p>sampled every 5s · 06:12:45</p><div class="spark" style="color:#62b8ff;margin-top:20px"></div></article>
+      </div>
+      <div class="hardware-bottom">
+        <article class="hw-card preset-card"><div class="eyebrow" style="color:#9cabc0">Presets</div><div class="preset-tile active"><span class="dot live" style="color:#61d49a"></span><div><strong>default</strong><div class="mono muted" style="font-size:10px">qwen2.5-coder-7b · ctx 8192</div></div><button class="button" style="color:#ef6b68">Stop</button></div><div class="preset-tile"><span class="dot" style="color:#71818d"></span><div><strong>llama3-8b</strong><div class="mono muted" style="font-size:10px">llama-3-8b.gguf</div></div><button class="button" style="color:#0c171f;background:var(--teal);border-color:var(--teal)">Start</button></div><p class="muted" style="font-size:11px">Capacity 1 of 2 · another preset queues behind VRAM headroom</p></article>
+        <article class="hw-card activity-card"><div class="card-heading"><span class="eyebrow" style="color:#9cabc0">Activity</span><span class="muted" style="font-size:11px">View all →</span></div><div class="activity-line mono"><span>06:12:02</span><span class="dot ok"></span><strong>runtime.start</strong><span>1.2s</span></div><div class="activity-line mono"><span>06:05:44</span><span class="dot ok"></span><strong>models.download</strong><span>34s</span></div><div class="activity-line mono"><span>05:58:31</span><span class="dot warn"></span><strong>models.resolve — timed out</strong><span>10s</span></div></article>
+      </div>
+    </main>
+  </section>
+
+  <section class="exploration calm" id="calm" aria-labelledby="calm-title">
+    <div class="calm-shell">
+      <aside class="calm-sidebar">
+        <div class="calm-brand"><i></i><span>LlamaRig</span></div>
+        <nav class="calm-nav"><small>Workspace</small><div class="active">▦ <span>Overview</span></div><div>◉ <span>Presets</span></div><div>□ <span>Models</span></div><div>≡ <span>Logs</span></div><small style="margin-top:20px">System</small><div>⚙ <span>Connection</span></div></nav>
+        <div class="calm-sidebar-footer"><span class="dot live" style="color:#61d49a"></span>&nbsp; rig-01 connected<br><span class="muted">API latency 18 ms</span></div>
+      </aside>
+      <main class="calm-main">
+        <header class="calm-top"><div><span class="eyebrow">Saturday, July 12</span><h1 id="calm-title">Good morning. Your rig is healthy.</h1></div><div class="calm-actions"><button class="button">Refresh</button><button class="button">Settings</button></div></header>
+        <div class="calm-health">
+          <article class="calm-card health-card"><div class="eyebrow" style="color:var(--muted)">System health</div><h2><span class="dot live" style="color:var(--green)"></span> All systems operational</h2><p>default is serving qwen2.5-coder-7b · sampled 4 seconds ago</p></article>
+          <article class="calm-card calm-metric"><label>Active presets</label><strong>1 / 2</strong><span class="muted" style="font-size:10px">default</span></article>
+          <article class="calm-card calm-metric"><label>Local models</label><strong>4</strong><span class="muted" style="font-size:10px">14.8 GB total</span></article>
+          <article class="calm-card calm-metric"><label>Uptime</label><strong>3d 14h</strong><span class="muted" style="font-size:10px">stable</span></article>
+        </div>
+        <div class="calm-content">
+          <article class="calm-card calm-chart-card"><div class="card-heading"><h3>Resource history</h3><span class="muted mono" style="font-size:10px">06:07—06:12</span></div><div class="calm-tabs"><span class="active">GPU 79%</span><span>CPU 31%</span><span>Memory 48%</span><span>VRAM 55%</span></div><div class="area-chart calm-chart"><div class="grid-lines"></div></div></article>
+          <div class="calm-stack"><article class="calm-card resource-card"><h3>Current resources</h3><div class="resource-row"><span>GPU utilization</span><b>79%</b><div class="resource-bar"><i></i></div></div><div class="resource-row"><span>Memory</span><b>48%</b><div class="resource-bar memory"><i></i></div></div><div class="resource-row"><span>Temperature</span><b>62°C</b></div></article><article class="calm-card event-card"><h3>Latest events</h3><div class="calm-event"><span class="dot ok"></span><span>runtime.start</span><span class="mono muted">1.2s</span></div><div class="calm-event"><span class="dot ok"></span><span>models.download</span><span class="mono muted">34s</span></div><div class="calm-event"><span class="dot warn"></span><span>models.resolve timeout</span><span class="mono muted">10s</span></div></article></div>
+        </div>
+        <article class="calm-card calm-presets"><div class="card-heading"><h3>Preset control</h3><span class="muted" style="font-size:11px">1 of 2 active</span></div><div class="calm-preset-row"><span class="running-badge">● Running</span><div><strong>default</strong><p>qwen2.5-coder-7b · ctx 8192 · up 3h 12m</p></div><button class="button" style="color:#52666f">Restart</button><button class="button" style="color:#d0443e">Stop</button></div><div class="calm-preset-row"><span class="running-badge" style="color:#708087;background:#e8edeb">Idle</span><div><strong>llama3-8b</strong><p>llama-3-8b.gguf</p></div><span></span><button class="button" style="color:white;background:var(--teal);border-color:var(--teal)">Start</button></div></article>
+      </main>
+    </div>
+  </section>
+</body>
+</html>
