@@ -1,0 +1,18 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "isolatedModules": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "paths": {
+      "$lib": ["./web/src/lib"],
+      "$lib/*": ["./web/src/lib/*"]
+    },
+    "types": ["vitest/globals", "vite/client"]
+  },
+  "include": ["web/src/**/*.ts", "web/src/**/*.svelte"],
+  "exclude": ["node_modules", "dist"]
+}

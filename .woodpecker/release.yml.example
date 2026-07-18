@@ -1,0 +1,40 @@
+# Inactive GitHub release fallback. Rename to release.yml to activate, add the
+# github_release_token secret, then run:
+# woodpecker-cli pipeline create --branch main --var RELEASE_VERSION=v0.1.0-alpha.1
+
+when:
+  - event: manual
+    branch: main
+
+steps:
+  webui-verify:
+    image: node:24
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@10.22.0 --activate
+      - cd webui
+      - pnpm install --frozen-lockfile
+      - pnpm run verify:web
+
+  verify-and-package:
+    image: golang:1.26.3
+    commands:
+      - test -n "$${RELEASE_VERSION}"
+      - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
+      - make custom-golangci-lint
+      - make test
+      - make lint
+      - commit_time=$$(git show -s --format=%cI "$${CI_COMMIT_SHA}")
+      - scripts/package-release.sh "$${RELEASE_VERSION}" "$${CI_COMMIT_SHA}" "$${commit_time}"
+      - cd dist/release && sha256sum --check SHA256SUMS
+
+  publish:
+    image: ghcr.io/cli/cli:latest
+    environment:
+      GH_TOKEN:
+        from_secret: github_release_token
+    commands:
+      - test "$${CI_COMMIT_BRANCH}" = main
+      - '! gh release view "$${RELEASE_VERSION}" --repo "$${CI_REPO}" >/dev/null 2>&1'
+      - gh release create "$${RELEASE_VERSION}" dist/release/* --repo "$${CI_REPO}" --target "$${CI_COMMIT_SHA}" --title "$${RELEASE_VERSION}" --generate-notes --draft
+      - gh release edit "$${RELEASE_VERSION}" --repo "$${CI_REPO}" --draft=false --prerelease

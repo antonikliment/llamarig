@@ -1,0 +1,329 @@
+package configstore
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	"llamarig/config"
+	"llamarig/platform/filedoc"
+
+	"gopkg.in/yaml.v3"
+)
+
+const DefaultLimitBytes int64 = 2 << 20
+
+var (
+	ErrEmpty     = errors.New("config.yaml content is empty")
+	ErrTooLarge  = errors.New("config.yaml content exceeds size limit")
+	ErrMalformed = errors.New("config.yaml content is malformed")
+)
+
+type ConfigYAML struct {
+	Path      string        `json:"path"`
+	Content   string        `json:"content"`
+	Parsed    config.Config `json:"parsed"`
+	SizeBytes int64         `json:"size_bytes"`
+	ModTime   time.Time     `json:"mod_time"`
+	SHA256    string        `json:"sha256"`
+}
+
+// RemoveRouterPresetReferences removes names from router.default_preset and
+// router.autostart_presets while preserving unrelated YAML nodes and comments.
+func (s *FileStore) RemoveRouterPresetReferences(ctx context.Context, names ...string) error {
+	remove := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		remove[name] = struct{}{}
+	}
+	_, err := s.mutateDocument(ctx, func(document *yaml.Node) bool {
+		return removePresetReferenceNodes(document, remove)
+	})
+	return err
+}
+
+// SetRouterAutostartPreset adds or removes name from router.autostart_presets,
+// preserving all other YAML nodes, comments and formatting.
+// Returns config.ErrAutostartCapExceeded when enabling would exceed router.models_max.
+func (s *FileStore) SetRouterAutostartPreset(ctx context.Context, name string, enabled bool) (WriteResult, error) {
+	return s.mutateDocument(ctx, func(document *yaml.Node) bool {
+		return setAutostartPreset(document, name, enabled)
+	})
+}
+
+// SetStartupServices replaces the top-level startup_services sequence while
+// preserving unrelated YAML nodes and comments.
+func (s *FileStore) SetStartupServices(ctx context.Context, services []string) (WriteResult, error) {
+	return s.mutateDocument(ctx, func(document *yaml.Node) bool {
+		root := documentRoot(document)
+		if root == nil {
+			return false
+		}
+		current := mappingValue(root, "startup_services")
+		if sequenceEquals(current, services) {
+			return false
+		}
+		if current == nil {
+			root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "startup_services"}, &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"})
+			current = root.Content[len(root.Content)-1]
+		}
+		current.Kind, current.Tag, current.Value = yaml.SequenceNode, "!!seq", ""
+		current.Content = make([]*yaml.Node, 0, len(services))
+		for _, service := range services {
+			current.Content = append(current.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: service})
+		}
+		return true
+	})
+}
+
+// mutateDocument applies mutate to the parsed config.yaml document and, when
+// it reports a change, validates and atomically rewrites the file preserving
+// comments and formatting.
+func (s *FileStore) mutateDocument(ctx context.Context, mutate func(*yaml.Node) bool) (WriteResult, error) {
+	if err := ctx.Err(); err != nil {
+		return WriteResult{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, data, _, err := s.readParsed()
+	if err != nil {
+		return WriteResult{}, err
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return WriteResult{}, fmt.Errorf("parse config YAML document: %w", err)
+	}
+	if !mutate(&document) {
+		return WriteResult{}, nil
+	}
+	var out bytes.Buffer
+	encoder := yaml.NewEncoder(&out)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&document); err != nil {
+		return WriteResult{}, fmt.Errorf("encode config YAML document: %w", err)
+	}
+	if err := encoder.Close(); err != nil {
+		return WriteResult{}, err
+	}
+	if err := s.Validate(ctx, out.String()); err != nil {
+		return WriteResult{}, err
+	}
+	return s.replaceLocked(out.String())
+}
+
+func sequenceEquals(node *yaml.Node, values []string) bool {
+	if node == nil || node.Kind != yaml.SequenceNode || len(node.Content) != len(values) {
+		return false
+	}
+	for i, value := range values {
+		if node.Content[i].Value != value {
+			return false
+		}
+	}
+	return true
+}
+
+// setAutostartPreset modifies the YAML document in place and reports whether
+// any change was made.
+func setAutostartPreset(document *yaml.Node, name string, enabled bool) bool {
+	root := documentRoot(document)
+	if root == nil {
+		return false
+	}
+	router := findOrCreateRouterNode(root, enabled)
+	if router == nil {
+		return false
+	}
+	if enabled {
+		return appendNameIfAbsent(findOrCreateAutostartSeq(router), name)
+	}
+	return removeSeqItems(mappingValue(router, "autostart_presets"), func(v string) bool { return v == name })
+}
+
+// documentRoot returns the top-level mapping node of a parsed YAML document.
+func documentRoot(document *yaml.Node) *yaml.Node {
+	if document == nil || len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+		return nil
+	}
+	return document.Content[0]
+}
+
+// findOrCreateRouterNode returns the router mapping node, creating it if
+// enabled is true and it does not exist. Returns nil when absent and not needed.
+func findOrCreateRouterNode(root *yaml.Node, enabled bool) *yaml.Node {
+	router := mappingValue(root, "router")
+	if router == nil {
+		if !enabled {
+			return nil // nothing to remove
+		}
+		routerKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "router", Tag: "!!str"}
+		router = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, routerKey, router)
+	}
+	if router.Kind != yaml.MappingNode {
+		return nil
+	}
+	return router
+}
+
+// findOrCreateAutostartSeq returns the autostart_presets sequence node under
+// router, creating it if absent.
+func findOrCreateAutostartSeq(router *yaml.Node) *yaml.Node {
+	seqNode := mappingValue(router, "autostart_presets")
+	if seqNode == nil {
+		seqKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "autostart_presets", Tag: "!!str"}
+		seqNode = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		router.Content = append(router.Content, seqKey, seqNode)
+	}
+	return seqNode
+}
+
+// appendNameIfAbsent appends name to seqNode if not already present.
+func appendNameIfAbsent(seqNode *yaml.Node, name string) bool {
+	if seqNode == nil || seqNode.Kind != yaml.SequenceNode {
+		return false
+	}
+	for _, item := range seqNode.Content {
+		if item.Value == name {
+			return false // already present, no-op
+		}
+	}
+	seqNode.Content = append(seqNode.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: name, Tag: "!!str"})
+	return true
+}
+
+// removeSeqItems drops sequence items whose value matches, reporting change.
+func removeSeqItems(seqNode *yaml.Node, match func(string) bool) bool {
+	if seqNode == nil || seqNode.Kind != yaml.SequenceNode {
+		return false
+	}
+	kept := seqNode.Content[:0]
+	changed := false
+	for _, item := range seqNode.Content {
+		if match(item.Value) {
+			changed = true
+			continue
+		}
+		kept = append(kept, item)
+	}
+	seqNode.Content = kept
+	return changed
+}
+
+func removePresetReferenceNodes(document *yaml.Node, remove map[string]struct{}) bool {
+	router := mappingValue(documentRoot(document), "router")
+	if router == nil {
+		return false
+	}
+	changed := false
+	if node := mappingValue(router, "default_preset"); node != nil {
+		if _, ok := remove[node.Value]; ok {
+			node.Value, changed = "", true
+		}
+	}
+	inRemove := func(v string) bool { _, ok := remove[v]; return ok }
+	return removeSeqItems(mappingValue(router, "autostart_presets"), inRemove) || changed
+}
+
+func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i+1]
+		}
+	}
+	return nil
+}
+
+type WriteResult = filedoc.WriteResult
+
+type FileStore struct {
+	path       string
+	limitBytes int64
+	mu         sync.Mutex
+}
+
+func NewFileStore(path string, limitBytes int64) *FileStore {
+	if limitBytes == 0 {
+		limitBytes = DefaultLimitBytes
+	}
+	return &FileStore{path: filepath.Clean(path), limitBytes: limitBytes}
+}
+
+func (s *FileStore) Read(_ context.Context) (ConfigYAML, error) {
+	info, data, parsed, err := s.readParsed()
+	if err != nil {
+		return ConfigYAML{}, err
+	}
+	return ConfigYAML{Path: s.path, Content: string(data), Parsed: parsed, SizeBytes: int64(len(data)), ModTime: info.ModTime().UTC(), SHA256: filedoc.SHA256Hex(data)}, nil
+}
+
+func (s *FileStore) Validate(_ context.Context, content string) error {
+	data := []byte(content)
+	if len(bytes.TrimSpace(data)) == 0 {
+		return ErrEmpty
+	}
+	if int64(len(data)) > s.limitBytes {
+		return ErrTooLarge
+	}
+	if _, err := config.Parse(data); err != nil {
+		return fmt.Errorf("%w: %w", ErrMalformed, err)
+	}
+	return nil
+}
+
+func (s *FileStore) Replace(ctx context.Context, content string) (WriteResult, error) {
+	if err := s.Validate(ctx, content); err != nil {
+		return WriteResult{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.replaceLocked(content)
+}
+
+func (s *FileStore) readParsed() (os.FileInfo, []byte, config.Config, error) {
+	info, err := os.Stat(s.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, config.Config{}, fmt.Errorf("config.yaml not found: %w", err)
+		}
+		return nil, nil, config.Config{}, fmt.Errorf("stat config.yaml: %w", err)
+	}
+	if info.Size() > s.limitBytes {
+		return nil, nil, config.Config{}, ErrTooLarge
+	}
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		return nil, nil, config.Config{}, fmt.Errorf("read config.yaml: %w", err)
+	}
+	parsed, err := config.Parse(data)
+	if err != nil {
+		return nil, nil, config.Config{}, fmt.Errorf("%w: %w", ErrMalformed, err)
+	}
+	return info, data, parsed, nil
+}
+
+func (s *FileStore) replaceLocked(content string) (WriteResult, error) {
+	_, err := os.Stat(s.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return WriteResult{}, fmt.Errorf("config.yaml not found: %w", err)
+		}
+		return WriteResult{}, fmt.Errorf("stat config.yaml: %w", err)
+	}
+	result, err := filedoc.WriteFile(s.path, content, filedoc.WriteOptions{Backup: true, Normalize: normalize})
+	if err != nil {
+		return WriteResult{}, fmt.Errorf("replace config.yaml: %w", err)
+	}
+	return result, nil
+}
+
+func normalize(content string) string {
+	return string(bytes.TrimRight([]byte(content), "\n")) + "\n"
+}

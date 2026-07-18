@@ -1,0 +1,28 @@
+listen_addr: "127.0.0.1:7000"
+model_storage_dir: "" # default: ${LLAMARIG_HOME}/models
+catalog_cache_dir: "" # default: ${LLAMARIG_HOME}/cache/hf-catalog
+catalog_cache_ttl: 6h
+log_archive_retention: 168h # 0s keeps archives indefinitely
+security:
+  auth_token_env: "LLAMARIG_CONTROL_TOKEN"
+  disable_origin_check: false
+
+router:
+  executable: "llama-server"
+  port: 8080
+  models_max: 1
+  default_preset: "default"
+  autostart_presets:
+    - "default"
+  stop_timeout: 10s
+  readiness_timeout: 60s
+  readiness_interval: 500ms
+  env:
+    LLAMA_CACHE: "./models"
+
+# Model presets live in ${LLAMARIG_HOME}/models.ini:
+#
+# [default]
+# model = /path/to/model.gguf
+# n-gpu-layers = auto
+# ctx-size = 262144

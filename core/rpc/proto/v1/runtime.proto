@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+import "v1/signals.proto";
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+message GetRuntimeStatusRequest {}
+
+message GetRuntimeStatusResponse {
+  bool ok = 1;
+  RuntimeStatus status = 2;
+}
+
+message GetRuntimeResourcesRequest {}
+
+message GetRuntimeResourcesResponse {
+  bool ok = 1;
+  RuntimeResources resources = 2;
+}
+
+message RuntimeTargetRequest {
+  string target = 1;
+}
+
+message RuntimeStatus {
+  string state = 1;
+  string detail = 2;
+  string checked_at = 3;
+  repeated RuntimePreset presets = 10;
+}
+
+message RuntimePreset {
+  string name = 1;
+  string state = 2;
+  bool ready = 3;
+}
+
+message RuntimeResources {
+  uint64 available_ram_bytes = 1;
+  uint64 total_ram_bytes = 2;
+  uint64 used_ram_bytes = 3;
+  double memory_used_percent = 4;
+  int32 cpu_logical_cores = 5;
+  double cpu_used_percent = 6;
+  repeated DiskSnapshot disks = 7;
+  repeated GPUSnapshot gpu = 10;
+  repeated RuntimeProcessSnapshot runtime = 11;
+  repeated string warnings = 12;
+}
+
+message GetLlamaServerParamsRequest {}
+
+message GetLlamaServerParamsResponse {
+  bool ok = 1;
+  repeated LlamaServerParam params = 2;
+  string source = 3;
+  string warning = 4;
+}
+
+message LlamaServerParam {
+  string key = 1;
+  repeated string aliases = 2;
+  string value_hint = 3;
+  string default_value = 4;
+  string description = 5;
+}

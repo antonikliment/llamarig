@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+// PresetEntry is a single `key = value` line from a models.ini section.
+message PresetEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// ModelPreset is one named section of models.ini.
+message ModelPreset {
+  string name = 1;
+  repeated PresetEntry entries = 2;
+  string source_status = 3;
+  string source_error = 4;
+  bool autostart = 5;
+}
+
+message ListPresetsRequest {}
+
+message ListPresetsResponse {
+  bool ok = 1;
+  string path = 2;
+  repeated PresetEntry global = 3;
+  repeated ModelPreset presets = 4;
+  int32 models_max = 5;
+}
+
+message PresetAutostartRequest {
+  string name = 1;
+  bool enabled = 2;
+}
+
+message GetPresetRequest {
+  string name = 1;
+}
+
+message PresetResponse {
+  bool ok = 1;
+  ModelPreset preset = 2;
+}
+
+message PutPresetRequest {
+  ModelPreset preset = 1;
+  bool create_only = 2;
+}
+
+message DeletePresetRequest {
+  string name = 1;
+}
+
+message CleanupPresetRequest {
+  string name = 1;
+}

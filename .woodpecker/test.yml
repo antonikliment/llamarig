@@ -1,0 +1,27 @@
+when:
+  - event: pull_request
+    branch: main
+  - event: push
+    branch: main
+
+steps:
+  webui-verify:
+    image: node:24
+    volumes:
+      - /var/cache/llamarig/pnpm/store:/pnpm/store
+    commands:
+      - corepack enable
+      - corepack prepare pnpm@10.22.0 --activate
+      - pnpm config set store-dir /pnpm/store
+      - cd webui
+      - pnpm install --frozen-lockfile
+      - pnpm run verify:web
+
+  go-test:
+    image: golang:1.26
+    volumes:
+      - /var/cache/llamarig/go/pkg/mod:/go/pkg/mod
+      - /var/cache/llamarig/go/build:/root/.cache/go-build
+    commands:
+      - go mod download
+      - make test

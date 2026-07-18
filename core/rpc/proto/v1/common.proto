@@ -1,0 +1,72 @@
+// core/rpc/proto/v1/common.proto
+syntax = "proto3";
+
+package llamarig.control.v1;
+
+option go_package = "llamarig/core/rpc/gen/v1;controlv1";
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+  string service = 2;
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  reserved 3, 4, 10;
+  reserved "version", "llamarig_home", "values";
+  bool ok = 1;
+  string service = 2;
+  RuntimeInfo info = 11;
+  BuildInfo build = 12;
+}
+
+message BuildInfo {
+  string version = 1;
+  string commit = 2;
+  string commit_time = 3;
+}
+
+message CommandResult {
+  string target = 1;
+  string action = 2;
+  string status = 3;
+  string message = 4;
+  int64 duration_ms = 8;
+}
+
+message CommandResponse {
+  bool ok = 1;
+  CommandResult result = 2;
+}
+
+message ValidationResponse {
+  bool ok = 1;
+}
+
+message MutationResponse {
+  bool ok = 1;
+  CommandResult result = 2;
+  TextDiff preview_diff = 3;
+}
+
+message TextDiff {
+  string original = 1;
+  string updated = 2;
+}
+
+message RuntimeInfo {
+  RouterInfo router = 1;
+  int32 presets_count = 2;
+  string default_preset = 3;
+  repeated string autostart_presets = 4;
+}
+
+message RouterInfo {
+  reserved 1;
+  string status = 2;
+  string detail = 3;
+  string checked_at = 4;
+}
