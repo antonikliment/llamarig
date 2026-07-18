@@ -19,7 +19,6 @@ Building from source additionally requires Go (see `go.mod` for the minimum vers
 
 Prerelease archives are published for Linux and macOS on amd64 and arm64. Download the matching archive and `SHA256SUMS` from the [GitHub releases page](https://github.com/antonikliment/llamarig/releases), then verify it before extracting:
 
-
 ```bash
 # Linux
 grep ' llamarig_<version>_linux_<arch>.tar.gz$' SHA256SUMS | sha256sum --check
@@ -30,7 +29,7 @@ grep ' llamarig_<version>_darwin_<arch>.tar.gz$' SHA256SUMS | shasum -a 256 --ch
 tar -xzf llamarig_<version>_<os>_<arch>.tar.gz
 install -m 0755 llamarig_<version>_<os>_<arch>/llamarig ~/.local/bin/llamarig
 llamarig version
-```
+``` 
 
 Release archives contain the LlamaRig binary, embedded web UI, README, and license. `llama-server` remains a separate prerequisite and must be available on `PATH` or selected during setup. Windows packages will follow after Windows process and local-control support is complete.
 
