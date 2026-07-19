@@ -1,0 +1,25 @@
+# Build artifacts and local state — rebuilt inside the image.
+.git
+dist/
+bin/
+llamarig
+.llamarig
+custom-golangci-lint
+core/rpc/gen/v1
+webui/dist/
+webui/node_modules/
+node_modules/
+webui/screenshots/
+webui/.svelte-kit/
+webui/.vite/
+webui/coverage/
+webui/playwright-report/
+webui/test-results/
+
+# Editor / OS / agent noise
+.idea/
+.vscode/
+.claude/
+.codex/
+*.log
+*.tmp

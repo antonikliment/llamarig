@@ -1,0 +1,18 @@
+# NVIDIA GPU override for LlamaRig.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Requires the NVIDIA Container Toolkit on the host. Upstream ships this image
+# but does not CI-test it, so treat GPU-in-Docker as experimental.
+services:
+  llamarig:
+    build:
+      args:
+        LLAMA_IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

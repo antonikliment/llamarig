@@ -13,15 +13,37 @@ A local control plane for [llama.cpp](https://github.com/ggml-org/llama.cpp) ser
 
 ## Prerequisites
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) built, with `llama-server` on your `PATH` (or note its full path — setup will ask for it)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) built, with `llama-server` on your `PATH` (or note its full path — setup will ask for it). The [Docker setup](#docker) bundles `llama-server`, so it needs no separate llama.cpp install.
 
 Optional: an NVIDIA GPU with `nvidia-smi` for GPU telemetry in the System tab/API.
 
 Building from source additionally requires Go (see `go.mod` for the minimum version) and Node.js + [pnpm](https://pnpm.io/) (via `corepack`) to build the web GUI. Release binaries embed the web UI — no Node.js or pnpm needed.
 
-## Install a release archive
+## Install
 
-Prerelease archives are published for Linux and macOS on amd64 and arm64. Download the matching archive and `SHA256SUMS` from the [GitHub releases page](https://github.com/antonikliment/llamarig/releases), then verify it before extracting:
+Prereleases are published for Linux and macOS on amd64 and arm64 from the
+[GitHub releases page](https://github.com/antonikliment/llamarig/releases). Pick
+one of the methods below.
+
+### Install script
+
+The installer detects your OS/arch, downloads the matching release archive,
+verifies its checksum, and installs the binary. It can also set you up to run in
+Docker instead (it asks when run interactively):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/antonikliment/llamarig/main/scripts/install.sh | sh
+
+# non-interactive choices:
+curl -fsSL .../install.sh | sh -s -- v0.1.0-alpha.2   # pin a release (binary)
+curl -fsSL .../install.sh | sh -s -- --docker         # build and run via Docker
+```
+
+The same `install.sh` ships as an asset on each release.
+
+### Manual release archive
+
+Download the matching archive and `SHA256SUMS`, then verify before extracting:
 
 ```bash
 # Linux
@@ -35,7 +57,43 @@ install -m 0755 llamarig_<version>_<os>_<arch>/llamarig ~/.local/bin/llamarig
 llamarig version
 ```
 
-Release archives contain the LlamaRig binary, embedded web UI, README, and license. `llama-server` remains a separate prerequisite and must be available on `PATH` or selected during setup. Windows packages will follow after Windows process and local-control support is complete.
+Release archives contain the LlamaRig binary, embedded web UI, README, and
+license. `llama-server` remains a separate prerequisite and must be available on
+`PATH` or selected during setup.
+
+### Docker
+
+The Docker image bundles `llama-server` (from the official
+[`ghcr.io/ggml-org/llama.cpp`](https://github.com/ggml-org/llama.cpp/pkgs/container/llama.cpp)
+image), so it is the only setup that needs no separately installed llama.cpp.
+No prebuilt LlamaRig image is published yet, so Compose builds it locally:
+
+```bash
+docker compose up -d --build
+# open http://127.0.0.1:7000/
+```
+
+Config, presets, and models persist in the `llamarig-home` volume mounted at
+`/root/.llamarig`. On first boot the container writes a default `config.yaml`
+and `models.ini` there; mount an existing `~/.llamarig` over that path to reuse
+your own setup. The container binds to loopback (`127.0.0.1:7000`), so use
+`http://127.0.0.1:7000` — not `localhost` — to satisfy the origin check.
+
+**NVIDIA GPU (experimental).** Add the GPU override, which builds on the
+`server-cuda` base and requests GPUs. It needs the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+on the host; upstream ships the CUDA image but does not CI-test it, so treat it
+as experimental:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+**Windows (early / partial).** There are no native Windows binaries yet —
+Windows process and local-control support are still in progress. Docker is the
+current path on Windows: run the CPU setup above under Docker Desktop with the
+WSL2 backend. GPU passthrough (WSL2 + NVIDIA Container Toolkit) is the
+least-tested combination and should be considered experimental.
 
 ## Quickstart
 
