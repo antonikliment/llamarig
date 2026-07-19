@@ -1,5 +1,9 @@
 # LlamaRig
 
+[![Test](https://github.com/antonikliment/llamarig/actions/workflows/test.yml/badge.svg)](https://github.com/antonikliment/llamarig/actions/workflows/test.yml)
+[![Lint](https://github.com/antonikliment/llamarig/actions/workflows/lint.yml/badge.svg)](https://github.com/antonikliment/llamarig/actions/workflows/lint.yml)
+[![Release](https://img.shields.io/github/v/release/antonikliment/llamarig?include_prereleases)](https://github.com/antonikliment/llamarig/releases)
+
 A local control plane for [llama.cpp](https://github.com/ggml-org/llama.cpp) server presets. Define named model presets once, then start, stop, and monitor them from whichever surface suits you: a TUI front door, a web GUI, an HTTP/MCP API, or a CLI client.
 
 - start, stop, restart, and status for llama runtime presets
