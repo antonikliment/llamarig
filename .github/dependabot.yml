@@ -1,0 +1,59 @@
+version: 2
+
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Let a release sit before Dependabot proposes it, so a just-published
+    # compromised version (e.g. a Shai-Hulud-style npm/supply-chain worm)
+    # has time to be caught and pulled before it lands in a PR here.
+    cooldown:
+      default-days: 7
+      semver-major-days: 21
+      semver-minor-days: 10
+      semver-patch-days: 5
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+
+  - package-ecosystem: "npm"
+    directory: "/webui"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 21
+      semver-minor-days: 10
+      semver-patch-days: 5
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "webui"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 21
+      semver-minor-days: 10
+      semver-patch-days: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
