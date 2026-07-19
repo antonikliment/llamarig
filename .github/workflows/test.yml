@@ -26,7 +26,7 @@ jobs:
           package-manager-cache: false
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}

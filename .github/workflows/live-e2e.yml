@@ -26,7 +26,7 @@ jobs:
           package-manager-cache: false
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
@@ -39,7 +39,7 @@ jobs:
 
       # Cache the downloaded llama.cpp binary across runs.
       - name: Cache llama.cpp
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/llamarig/e2e/llama.cpp
           key: llama-cpp-e2e-${{ runner.os }}
