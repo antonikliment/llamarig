@@ -98,7 +98,10 @@ install_binary() {
 	esac
 
 	if [ -z "$version" ]; then
-		version=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" | grep '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+		# Use the releases list, not /releases/latest: the latter excludes
+		# prereleases and 404s while only prereleases exist. The list is newest
+		# first, so the first tag_name is the most recent release.
+		version=$(curl -fsSL "https://api.github.com/repos/$repo/releases?per_page=1" | grep '"tag_name"' | head -1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
 		if [ -z "$version" ]; then
 			echo "could not determine latest release version" >&2
 			exit 1

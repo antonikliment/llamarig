@@ -41,14 +41,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          deadline=$((SECONDS + 1200)) # wait up to 20 minutes for pending checks
           for check in Test Lint; do
-            conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
-              --jq --arg name "$check" \
-              '[.check_runs[] | select(.name == $name)] | sort_by(.started_at) | last | .conclusion // "missing"')
-            if [[ "$conclusion" != "success" ]]; then
-              echo "$check on $GITHUB_SHA is not successful (got: $conclusion)" >&2
-              exit 1
-            fi
+            while true; do
+              read -r status conclusion <<<"$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
+                --jq "([.check_runs[] | select(.name == \"$check\")] | sort_by(.started_at) | last) as \$r
+                      | \"\(\$r.status // \"missing\") \(\$r.conclusion // \"none\")\"")"
+              if [[ "$status" == "completed" ]]; then
+                if [[ "$conclusion" == "success" ]]; then
+                  echo "$check succeeded on $GITHUB_SHA"
+                  break
+                fi
+                echo "$check on $GITHUB_SHA concluded $conclusion (need success)" >&2
+                exit 1
+              fi
+              if (( SECONDS >= deadline )); then
+                echo "timed out waiting for $check on $GITHUB_SHA (status: $status)" >&2
+                exit 1
+              fi
+              echo "waiting for $check on $GITHUB_SHA (status: $status)..."
+              sleep 15
+            done
           done
 
       - uses: actions/checkout@v7
@@ -69,25 +82,25 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      - name: Verify web UI
+      # Test and Lint already ran on this commit (gated above); here we only
+      # build the artifacts the release needs.
+      - name: Build web UI
         run: |
           corepack enable
           corepack prepare pnpm@10.22.0 --activate
           cd webui
           pnpm install --frozen-lockfile
-          pnpm run verify:web
+          pnpm run build
 
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
 
-      - name: Verify Go
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
-          make custom-golangci-lint
-          make test
-          make lint
+      # core/rpc/gen/v1 is generated (gitignored); package-release.sh's go
+      # build needs it present.
+      - name: Generate code
+        run: make generate
 
       - name: Package release
         env:
