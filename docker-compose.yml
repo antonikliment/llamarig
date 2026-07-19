@@ -1,0 +1,26 @@
+# LlamaRig, CPU build.
+#
+#   docker compose up -d --build
+#   open http://127.0.0.1:7000/
+#
+# For an NVIDIA GPU build, add the override file (see README):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+services:
+  llamarig:
+    build:
+      context: .
+      args:
+        # CPU image by default; the GPU override swaps this.
+        LLAMA_IMAGE: ghcr.io/ggml-org/llama.cpp:server
+    image: llamarig:local
+    # Bind to loopback only: browser clients use http://127.0.0.1:7000.
+    ports:
+      - "127.0.0.1:7000:7000"
+    volumes:
+      # Config, presets, models, logs. Point this at a host ~/.llamarig to
+      # reuse an existing setup, or keep the named volume for a fresh install.
+      - llamarig-home:/root/.llamarig
+    restart: unless-stopped
+
+volumes:
+  llamarig-home:
