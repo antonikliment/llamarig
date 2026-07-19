@@ -42,4 +42,6 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
 	archives+=("$archive")
 done
 
-(cd "$output_dir" && sha256sum "${archives[@]##*/}" >SHA256SUMS)
+cp scripts/install.sh "$output_dir/install.sh"
+
+(cd "$output_dir" && sha256sum "${archives[@]##*/}" install.sh >SHA256SUMS)
