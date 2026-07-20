@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"llamarig/config"
 
@@ -74,7 +76,21 @@ func EnsureWithOptions(ctx context.Context, opts Options) error {
 		}
 		return fmt.Errorf("run setup wizard: %w", err)
 	}
-	return WriteFiles(paths, answers, opts.Force)
+	if err := WriteFiles(paths, answers, opts.Force); err != nil {
+		return err
+	}
+	printSetupSummary(out, paths, answers)
+	return nil
+}
+
+func printSetupSummary(out io.Writer, paths Paths, answers Answers) {
+	_, _ = fmt.Fprintf(out, "%s setup complete.\n\nCreated:\n  %s\n  %s\n\nNext steps:\n"+
+		"  1. Run `%s` to open the TUI (it starts %s automatically)\n"+
+		"  2. Get a model into %s (or via the web GUI model browser)\n"+
+		"  3. Start the \"default\" preset from the TUI, `%s start default`, or the GUI\n",
+		config.ProjectDisplayName, paths.Config, paths.ModelsINI,
+		config.ProjectName, strings.Join(answers.StartupServices, " + "),
+		answers.LlamaModelsDir, config.ProjectName)
 }
 
 func configExists(path string) (bool, error) {

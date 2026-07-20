@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,188 +10,156 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/huh/v2"
 
 	"llamarig/config"
 )
 
-type step int
-
-const (
-	stepWelcome step = iota
-	stepListen
-	stepToken
-	stepLlamaExe
-	stepLlamaModelsDir
-	stepLlamaModel
-	stepLlamaPort
-	stepAutoStart
-	stepStartupServices
-	stepReview
-	stepDone
-)
-
-type model struct {
-	paths                    Paths
-	answers                  Answers
-	step                     step
-	input                    textinput.Model
-	cancelled                bool
-	confirmedRemoteNoToken   bool
-	confirmedMissingLlamaExe bool
-	err                      error
-}
-
-var titleStyle = lipgloss.NewStyle().Bold(true)
-
-var stepPrompts = map[step]string{
-	stepListen:          "Control server listen address",
-	stepToken:           "Bearer token environment variable",
-	stepLlamaExe:        "llama-server executable",
-	stepLlamaModelsDir:  "Models directory",
-	stepLlamaModel:      "Model file (blank to use models directory)",
-	stepLlamaPort:       "Router port",
-	stepAutoStart:       "Autostart llama-server",
-	stepStartupServices: "Start automatically: control, web, or both",
-}
-
-func RunWizard(ctx context.Context, paths Paths) (Answers, error) {
-	m := newModel(paths)
-	program := tea.NewProgram(m)
-	final, err := program.Run()
-	if err != nil {
-		return Answers{}, err
-	}
-	result, ok := final.(*model)
-	if !ok {
-		return Answers{}, fmt.Errorf("unexpected setup model %T", final)
-	}
-	if result.err != nil {
-		return Answers{}, result.err
-	}
-	if result.cancelled {
-		return Answers{}, ErrCancelled
-	}
-	_ = ctx
-	return result.answers, nil
-}
-
-func newModel(paths Paths) *model {
-	input := textinput.New()
-	input.Focus()
-	input.CharLimit = 512
-	m := &model{paths: paths, answers: DefaultAnswers(paths), input: input}
-	m.setInput()
-	return m
-}
-
-func (m *model) Init() tea.Cmd {
-	return textinput.Blink
-}
-
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			m.cancelled = true
-			return m, tea.Quit
-		case "b":
-			m.back()
-			return m, nil
-		case "enter":
-			return m.advance()
+// runForm runs a huh form and maps a user abort (ctrl+c/esc) to ErrCancelled.
+// It is a package var so tests can stub the interactive form.
+var runForm = func(ctx context.Context, form *huh.Form) error {
+	if err := form.RunWithContext(ctx); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			return ErrCancelled
 		}
-	}
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
-}
-
-func (m *model) View() tea.View {
-	if m.step == stepDone {
-		return tea.NewView(titleStyle.Render(config.ProjectDisplayName+" setup complete.") +
-			"\n\nCreated:\n  " + m.paths.Config + "\n  " + m.paths.ModelsINI +
-			"\n\nNext steps:\n  1. Run `" + config.ProjectName + "` to open the TUI (it starts " + strings.Join(m.answers.StartupServices, " + ") + " automatically)\n" +
-			"  2. Get a model into " + m.answers.LlamaModelsDir + " (or via the web GUI model browser)\n" +
-			"  3. Start the \"default\" preset from the TUI, `" + config.ProjectName + " start default`, or the GUI\n")
-	}
-	var b strings.Builder
-	b.WriteString(titleStyle.Render(config.ProjectDisplayName + " setup"))
-	b.WriteString("\n\n")
-	switch m.step {
-	case stepWelcome:
-		b.WriteString("This will create:\n  " + m.paths.Config + "\n  " + m.paths.ModelsINI + "\n\nEnter: continue  q: cancel\n")
-	case stepAutoStart:
-		b.WriteString("Start llama-server automatically when " + config.ProjectDisplayName + " starts? yes/no\n\n")
-		b.WriteString(m.input.View())
-	case stepReview:
-		b.WriteString("Review\n\n")
-		b.WriteString(config.ProjectDisplayName + " home:       " + m.paths.Home + "\n")
-		b.WriteString("Config file:       " + m.paths.Config + "\n")
-		b.WriteString("Model presets:     " + m.paths.ModelsINI + "\n")
-		b.WriteString("Listen address:    " + m.answers.ListenAddr + "\n")
-		b.WriteString("Starts automatically: " + strings.Join(m.answers.StartupServices, ", ") + "\n")
-		b.WriteString("Enter: write files  b: back  q: cancel\n")
-	default:
-		b.WriteString(stepPrompts[m.step] + "\n\n")
-		b.WriteString(m.input.View())
-		b.WriteString("\n\nEnter: continue  b: back  q: cancel\n")
-	}
-	if m.err != nil {
-		b.WriteString("\nError: " + m.err.Error() + "\n")
-	}
-	return tea.NewView(b.String())
-}
-
-func (m *model) advance() (tea.Model, tea.Cmd) {
-	m.err = nil
-	if m.step == stepReview {
-		m.step = stepDone
-		return m, tea.Quit
-	}
-	if err := m.captureStepValue(); err != nil {
-		m.err = err
-		return m, nil
-	}
-	m.step++
-	m.setInput()
-	return m, nil
-}
-
-func (m *model) captureStepValue() error {
-	switch m.step {
-	case stepListen:
-		return m.captureListen()
-	case stepToken:
-		return m.captureToken()
-	case stepLlamaExe:
-		return m.captureLlamaExe()
-	case stepLlamaModelsDir, stepLlamaModel:
-		*m.fields()[m.step] = strings.TrimSpace(m.input.Value())
-	case stepLlamaPort:
-		return m.capturePort()
-	case stepAutoStart:
-		m.answers.AutoStart = strings.ToLower(strings.TrimSpace(m.input.Value())) == "yes"
-	case stepStartupServices:
-		return m.captureStartupServices()
+		return err
 	}
 	return nil
 }
 
-func (m *model) captureLlamaExe() error {
-	value := strings.TrimSpace(m.input.Value())
-	if value == "" {
-		value = config.DefaultLlamaExecutable
+// RunWizard collects setup answers through an interactive huh form, restoring
+// the full-screen UI and back navigation while keeping validation and the
+// remote/executable safety confirmations.
+func RunWizard(ctx context.Context, paths Paths) (Answers, error) {
+	answers := DefaultAnswers(paths)
+	startup := "both"
+	proceed := true
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title(config.ProjectDisplayName+" setup").
+				Description("This will create:\n  "+paths.Config+"\n  "+paths.ModelsINI),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("Control server listen address").Value(&answers.ListenAddr).Validate(validateListen),
+			huh.NewInput().Title("Bearer token environment variable").Value(&answers.AuthTokenEnv),
+			huh.NewInput().Title("llama-server executable").Value(&answers.LlamaExecutable),
+			huh.NewInput().Title("Models directory").Value(&answers.LlamaModelsDir),
+			huh.NewInput().Title("Model file (blank to use models directory)").Value(&answers.LlamaModelFile),
+			huh.NewInput().Title("Router port").Value(&answers.LlamaPort).Validate(validatePort),
+			huh.NewConfirm().Title("Autostart llama-server when "+config.ProjectDisplayName+" starts?").Value(&answers.AutoStart),
+			huh.NewSelect[string]().
+				Title("Start automatically").
+				Options(
+					huh.NewOption("control + web", "both"),
+					huh.NewOption("control", "control"),
+					huh.NewOption("web", "web"),
+				).
+				Value(&startup),
+		),
+		huh.NewGroup(
+			huh.NewNote().Title("Review").DescriptionFunc(func() string {
+				return reviewSummary(paths, &answers, startup)
+			}, []any{&answers, &startup}),
+			huh.NewConfirm().Title("Write configuration files?").Value(&proceed),
+		),
+	)
+
+	if err := runForm(ctx, form); err != nil {
+		return Answers{}, err
 	}
-	m.answers.LlamaExecutable = value
-	if llamaExecutableResolves(value) || m.confirmedMissingLlamaExe {
-		return nil
+	if !proceed {
+		return Answers{}, ErrCancelled
 	}
-	m.confirmedMissingLlamaExe = true
-	return fmt.Errorf("%q not found; install llama.cpp and ensure llama-server is on PATH (or set the full path) — press Enter again to continue anyway", value)
+
+	normalizeAnswers(&answers, startup)
+
+	if err := confirmSafety(ctx, answers); err != nil {
+		return Answers{}, err
+	}
+	return answers, nil
+}
+
+func normalizeAnswers(a *Answers, startup string) {
+	a.ListenAddr = strings.TrimSpace(a.ListenAddr)
+	a.AuthTokenEnv = strings.TrimSpace(a.AuthTokenEnv)
+	a.LlamaModelsDir = strings.TrimSpace(a.LlamaModelsDir)
+	a.LlamaModelFile = strings.TrimSpace(a.LlamaModelFile)
+	a.LlamaPort = strings.TrimSpace(a.LlamaPort)
+	a.LlamaExecutable = strings.TrimSpace(a.LlamaExecutable)
+	if a.LlamaExecutable == "" {
+		a.LlamaExecutable = config.DefaultLlamaExecutable
+	}
+	a.StartupServices = startupServices(startup)
+}
+
+func reviewSummary(paths Paths, a *Answers, startup string) string {
+	return config.ProjectDisplayName + " home:       " + paths.Home + "\n" +
+		"Config file:       " + paths.Config + "\n" +
+		"Model presets:     " + paths.ModelsINI + "\n" +
+		"Listen address:    " + a.ListenAddr + "\n" +
+		"Starts automatically: " + strings.Join(startupServices(startup), ", ")
+}
+
+func validateListen(addr string) error {
+	_, err := netSplitHostPort(strings.TrimSpace(addr))
+	return err
+}
+
+func validatePort(port string) error {
+	value, err := strconv.Atoi(strings.TrimSpace(port))
+	if err != nil || value < 1 || value > 65535 {
+		return fmt.Errorf("port must be 1-65535")
+	}
+	return nil
+}
+
+func startupServices(sel string) []string {
+	switch sel {
+	case "control":
+		return []string{config.StartupServiceControl}
+	case "web":
+		return []string{config.StartupServiceWeb}
+	default:
+		return []string{config.StartupServiceControl, config.StartupServiceWeb}
+	}
+}
+
+// confirmSafety asks the user to confirm the two risky-but-allowed conditions
+// the wizard previously warned about: a remote-capable bind without a token
+// env, and a llama-server executable that does not resolve.
+func confirmSafety(ctx context.Context, a Answers) error {
+	if remoteWithoutToken(a) {
+		if err := requireConfirm(ctx, "Remote-capable bind without a token env configured — continue anyway?"); err != nil {
+			return err
+		}
+	}
+	if !llamaExecutableResolves(a.LlamaExecutable) {
+		msg := fmt.Sprintf("%q not found; install llama.cpp and ensure llama-server is on PATH (or set the full path) — continue anyway?", a.LlamaExecutable)
+		if err := requireConfirm(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func remoteWithoutToken(a Answers) bool {
+	return (&config.Config{ListenAddr: a.ListenAddr}).AllowsNonLoopback() && os.Getenv(a.AuthTokenEnv) == ""
+}
+
+// requireConfirm shows a single yes/no prompt and returns ErrCancelled if the
+// user declines.
+func requireConfirm(ctx context.Context, title string) error {
+	proceed := false
+	form := huh.NewForm(huh.NewGroup(huh.NewConfirm().Title(title).Value(&proceed)))
+	if err := runForm(ctx, form); err != nil {
+		return err
+	}
+	if !proceed {
+		return ErrCancelled
+	}
+	return nil
 }
 
 func llamaExecutableResolves(path string) bool {
@@ -200,76 +169,4 @@ func llamaExecutableResolves(path string) bool {
 	}
 	_, err := exec.LookPath(path)
 	return err == nil
-}
-
-func (m *model) captureStartupServices() error {
-	value := strings.ToLower(strings.TrimSpace(m.input.Value()))
-	switch value {
-	case "", "both":
-		m.answers.StartupServices = []string{config.StartupServiceControl, config.StartupServiceWeb}
-	case "control":
-		m.answers.StartupServices = []string{config.StartupServiceControl}
-	case "web":
-		m.answers.StartupServices = []string{config.StartupServiceWeb}
-	default:
-		return fmt.Errorf("enter control, web, or both")
-	}
-	return nil
-}
-
-func (m *model) captureListen() error {
-	m.answers.ListenAddr = strings.TrimSpace(m.input.Value())
-	_, err := netSplitHostPort(m.answers.ListenAddr)
-	return err
-}
-
-func (m *model) captureToken() error {
-	m.answers.AuthTokenEnv = strings.TrimSpace(m.input.Value())
-	if !(&config.Config{ListenAddr: m.answers.ListenAddr}).AllowsNonLoopback() || os.Getenv(m.answers.AuthTokenEnv) != "" || m.confirmedRemoteNoToken {
-		return nil
-	}
-	m.confirmedRemoteNoToken = true
-	return fmt.Errorf("remote-capable bind without token env configured; press Enter again to confirm")
-}
-
-func (m *model) capturePort() error {
-	port := strings.TrimSpace(m.input.Value())
-	value, err := strconv.Atoi(port)
-	if err != nil || value < 1 || value > 65535 {
-		return fmt.Errorf("port must be 1-65535")
-	}
-	m.answers.LlamaPort = port
-	return nil
-}
-
-func (m *model) back() {
-	if m.step > stepWelcome {
-		m.step--
-	}
-	m.setInput()
-}
-
-func (m *model) setInput() {
-	m.input.SetValue(m.value())
-	m.input.Placeholder = m.value()
-	m.input.Focus()
-	m.input.CursorEnd()
-}
-
-func (m *model) value() string {
-	if m.step == stepStartupServices {
-		return "both"
-	}
-	if field := m.fields()[m.step]; field != nil {
-		return *field
-	}
-	return "no"
-}
-
-func (m *model) fields() map[step]*string {
-	return map[step]*string{
-		stepListen: &m.answers.ListenAddr, stepToken: &m.answers.AuthTokenEnv,
-		stepLlamaExe: &m.answers.LlamaExecutable, stepLlamaModelsDir: &m.answers.LlamaModelsDir,
-		stepLlamaModel: &m.answers.LlamaModelFile, stepLlamaPort: &m.answers.LlamaPort,
-	}
 }
