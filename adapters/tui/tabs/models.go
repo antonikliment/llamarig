@@ -9,15 +9,14 @@ import (
 	controlv1 "llamarig/core/rpc/gen/v1"
 
 	bindkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
 type ModelsTab struct {
-	selected          int // preset selection
-	presetOffset      int // preset list scroll
-	modelSel          int // local model selection
-	offset            int // model list scroll
+	presetTable       table.Model
+	modelTable        table.Model
 	focusModels       bool
 	message           string
 	err               string
@@ -29,24 +28,61 @@ type ModelsTab struct {
 type presetStartRequestMsg struct{ name string }
 type presetStartResultMsg struct{ err error }
 
-func NewModelsTab() ModelsTab { return ModelsTab{keys: DefaultKeyMap()} }
+func NewModelsTab() ModelsTab {
+	return ModelsTab{
+		keys: DefaultKeyMap(),
+		presetTable: table.New(table.WithColumns([]table.Column{
+			{Title: "Preset", Width: 16}, {Title: "Model", Width: 40}, {Title: "State", Width: 12},
+		})),
+		modelTable: table.New(table.WithColumns([]table.Column{
+			{Title: "Local model", Width: 40}, {Title: "Size", Width: 10}, {Title: "Use", Width: 20},
+		})),
+	}
+}
+
+func (t *ModelsTab) setRows(snapshot dashboardSnapshot) {
+	presetRows := make([]table.Row, 0, len(snapshot.presets))
+	for i := range snapshot.presets {
+		preset := &snapshot.presets[i]
+		presetRows = append(presetRows, table.Row{preset.Name, presetModel(preset), presetState(preset, snapshot.runtime)})
+	}
+	t.presetTable.SetRows(presetRows)
+	modelRows := make([]table.Row, 0, len(snapshot.localModels))
+	for _, model := range snapshot.localModels {
+		modelRows = append(modelRows, table.Row{model.GetFilename(), formatBytes(model.GetSizeBytes()), modelUse(model)})
+	}
+	t.modelTable.SetRows(modelRows)
+}
+
+func presetState(preset *presetView, runtime *controlv1.RuntimeStatus) string {
+	switch {
+	case presetUnavailable(preset):
+		return "Unavailable"
+	case presetRunning(runtime, preset.Name):
+		return "Running"
+	default:
+		return "Stopped"
+	}
+}
+
+func modelUse(model *controlv1.LocalModel) string {
+	if len(model.GetUsedByPresets()) > 0 {
+		return "in: " + strings.Join(model.GetUsedByPresets(), ",")
+	}
+	return ""
+}
 
 func (t *ModelsTab) Update(msg tea.Msg, snapshot dashboardSnapshot) tea.Cmd {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil
 	}
+	t.setRows(snapshot)
 	presets, models := snapshot.presets, snapshot.localModels
-	if len(presets) > 0 {
-		t.selected = min(t.selected, len(presets)-1)
-	}
 	if len(models) == 0 {
 		t.focusModels = false
-	} else {
-		t.modelSel = min(t.modelSel, len(models)-1)
-		if len(presets) == 0 {
-			t.focusModels = true
-		}
+	} else if len(presets) == 0 {
+		t.focusModels = true
 	}
 	if key.String() == "tab" && len(models) > 0 && len(presets) > 0 {
 		t.focusModels, t.pendingDeletePath = !t.focusModels, ""
@@ -63,36 +99,42 @@ func (t *ModelsTab) updatePresets(key tea.KeyPressMsg, snapshot dashboardSnapsho
 	if len(presets) == 0 {
 		return nil
 	}
+	sel := min(t.presetTable.Cursor(), len(presets)-1)
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
-		t.selected, t.pendingCleanup, t.message, t.err = max(0, t.selected-1), "", "", ""
+		t.presetTable.MoveUp(1)
+		t.pendingCleanup, t.message, t.err = "", "", ""
 	case bindkey.Matches(key, t.keys.Down):
-		t.selected, t.pendingCleanup, t.message, t.err = min(len(presets)-1, t.selected+1), "", "", ""
+		t.presetTable.MoveDown(1)
+		t.pendingCleanup, t.message, t.err = "", "", ""
 	case key.String() == "esc":
 		t.pendingCleanup = ""
-	case (key.String() == "d" || key.String() == "y") && presetUnavailable(&presets[t.selected]):
-		return t.cleanupSelected(&presets[t.selected], key.String() == "y")
-	case bindkey.Matches(key, t.keys.RunAction) && !presetRunning(snapshot.runtime, presets[t.selected].Name):
-		if presetUnavailable(&presets[t.selected]) {
-			t.err = presets[t.selected].SourceError
+	case (key.String() == "d" || key.String() == "y") && presetUnavailable(&presets[sel]):
+		return t.cleanupSelected(&presets[sel], key.String() == "y")
+	case bindkey.Matches(key, t.keys.RunAction) && !presetRunning(snapshot.runtime, presets[sel].Name):
+		if presetUnavailable(&presets[sel]) {
+			t.err = presets[sel].SourceError
 			return nil
 		}
-		name := presets[t.selected].Name
+		name := presets[sel].Name
 		return func() tea.Msg { return presetStartRequestMsg{name: name} }
 	}
 	return nil
 }
 
 func (t *ModelsTab) updateModels(key tea.KeyPressMsg, models []*controlv1.LocalModel) tea.Cmd {
+	sel := min(t.modelTable.Cursor(), len(models)-1)
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
-		t.modelSel, t.pendingDeletePath = max(0, t.modelSel-1), ""
+		t.modelTable.MoveUp(1)
+		t.pendingDeletePath = ""
 	case bindkey.Matches(key, t.keys.Down):
-		t.modelSel, t.pendingDeletePath = min(len(models)-1, t.modelSel+1), ""
+		t.modelTable.MoveDown(1)
+		t.pendingDeletePath = ""
 	case key.String() == "esc":
 		t.pendingDeletePath = ""
 	case (key.String() == "d" || key.String() == "y") && len(models) > 0:
-		return t.deleteSelected(models[t.modelSel], key.String() == "y")
+		return t.deleteSelected(models[sel], key.String() == "y")
 	}
 	return nil
 }
@@ -152,22 +194,26 @@ func (t *ModelsTab) deleteSelected(model *controlv1.LocalModel, confirm bool) te
 }
 
 func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
+	t.setRows(snapshot)
 	presets, models := snapshot.presets, snapshot.localModels
-	if len(presets) > 0 {
-		t.selected = min(t.selected, len(presets)-1)
-	}
-	if t.modelSel >= len(models) {
-		t.modelSel = max(0, len(models)-1)
-	}
 	presetH := max(5, height/3)
 	modelH := max(5, height/3)
 	detailH := max(3, height-presetH-modelH-2)
-	t.presetOffset = clampOffset(t.selected, t.presetOffset, max(1, presetH-3))
-	t.offset = clampOffset(t.modelSel, t.offset, max(1, modelH-4))
-	presetList := ui.PanelStyle(ui.Purple, !t.focusModels).Width(width).Height(presetH).
-		Render(lipgloss.JoinVertical(lipgloss.Left, t.presetRows(width, max(1, presetH-3), snapshot)...))
-	modelList := ui.PanelStyle(ui.Purple, t.focusModels).Width(width).Height(modelH).
-		Render(lipgloss.JoinVertical(lipgloss.Left, t.modelRows(width, max(1, modelH-4), snapshot)...))
+
+	if t.focusModels {
+		t.modelTable.Focus()
+		t.presetTable.Blur()
+	} else {
+		t.presetTable.Focus()
+		t.modelTable.Blur()
+	}
+	t.presetTable.SetWidth(width - 2)
+	t.presetTable.SetHeight(max(1, presetH-2))
+	t.modelTable.SetWidth(width - 2)
+	t.modelTable.SetHeight(max(1, modelH-2))
+
+	presetList := ui.PanelStyle(ui.Purple, !t.focusModels).Width(width).Height(presetH).Render(t.presetPane(snapshot))
+	modelList := ui.PanelStyle(ui.Purple, t.focusModels).Width(width).Height(modelH).Render(t.modelPane(snapshot))
 	var detail string
 	if t.focusModels {
 		detail = localModelDetail(width, detailH, t.selectedModel(models))
@@ -177,71 +223,50 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, presetList, modelList, detail, "", modelHelp(t.keys)), 0, height)
 }
 
-// clampOffset keeps sel within [offset, offset+visible) by adjusting offset.
-func clampOffset(sel, offset, visible int) int {
-	if sel < offset {
-		return sel
+func (t *ModelsTab) presetPane(snapshot dashboardSnapshot) string {
+	if len(snapshot.presets) == 0 {
+		if warning := snapshot.warnings["presets"]; warning != "" {
+			return warningStyle.Render("Presets unavailable: " + warning)
+		}
+		return ui.MutedStyle.Render("No model presets configured")
 	}
-	if sel >= offset+visible {
-		return sel - visible + 1
+	rows := []string{t.presetTable.View()}
+	if t.pendingCleanup != "" {
+		rows = append(rows, warningStyle.Render("Cleanup "+t.pendingCleanup+" and its default/autostart references? Press d or y to confirm, esc to cancel"))
+	} else if !t.focusModels {
+		rows = appendStatusRows(rows, t.err, t.message)
 	}
-	return offset
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func (t *ModelsTab) modelPane(snapshot dashboardSnapshot) string {
+	if len(snapshot.localModels) == 0 {
+		if warning := snapshot.warnings["models"]; warning != "" {
+			return warningStyle.Render("Models unavailable: " + warning)
+		}
+		return ui.MutedStyle.Render("No local models downloaded")
+	}
+	rows := []string{t.modelTable.View()}
+	if warning := t.pendingDeleteWarning(snapshot.localModels); warning != "" {
+		rows = append(rows, warningStyle.Render(warning))
+	} else {
+		rows = appendStatusRows(rows, t.err, t.message)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
 func (t *ModelsTab) selectedPreset(presets []presetView) *presetView {
 	if len(presets) == 0 {
 		return nil
 	}
-	return &presets[t.selected]
+	return &presets[min(t.presetTable.Cursor(), len(presets)-1)]
 }
 
 func (t *ModelsTab) selectedModel(models []*controlv1.LocalModel) *controlv1.LocalModel {
 	if len(models) == 0 {
 		return nil
 	}
-	return models[t.modelSel]
-}
-
-func (t *ModelsTab) presetRows(width, visible int, snapshot dashboardSnapshot) []string {
-	presets := snapshot.presets
-	rows := []string{presetsHeader()}
-	switch {
-	case len(presets) == 0 && snapshot.warnings["presets"] != "":
-		rows = append(rows, warningStyle.Render("Presets unavailable: "+snapshot.warnings["presets"]))
-	case len(presets) == 0:
-		rows = append(rows, ui.MutedStyle.Render("No model presets configured"))
-	default:
-		for index := t.presetOffset; index < min(len(presets), t.presetOffset+visible); index++ {
-			rows = append(rows, presetRow(&presets[index], snapshot.runtime, index == t.selected && !t.focusModels, width))
-		}
-	}
-	if t.pendingCleanup != "" {
-		rows = append(rows, warningStyle.Render("Cleanup "+t.pendingCleanup+" and its default/autostart references? Press d or y to confirm, esc to cancel"))
-	} else if !t.focusModels {
-		rows = appendStatusRows(rows, t.err, t.message)
-	}
-	return rows
-}
-
-func (t *ModelsTab) modelRows(width, visible int, snapshot dashboardSnapshot) []string {
-	models := snapshot.localModels
-	rows := []string{modelsHeader()}
-	switch {
-	case len(models) == 0 && snapshot.warnings["models"] != "":
-		rows = append(rows, warningStyle.Render("Models unavailable: "+snapshot.warnings["models"]))
-	case len(models) == 0:
-		rows = append(rows, ui.MutedStyle.Render("No local models downloaded"))
-	default:
-		for index := t.offset; index < min(len(models), t.offset+visible); index++ {
-			rows = append(rows, localModelRow(models[index], index == t.modelSel && t.focusModels, width))
-		}
-	}
-	if warning := t.pendingDeleteWarning(models); warning != "" {
-		rows = append(rows, warningStyle.Render(warning))
-	} else {
-		rows = appendStatusRows(rows, t.err, t.message)
-	}
-	return rows
+	return models[min(t.modelTable.Cursor(), len(models)-1)]
 }
 
 // appendStatusRows appends a rendered error or (if no error) success row,
@@ -317,59 +342,6 @@ func localModelDetail(width, height int, model *controlv1.LocalModel) string {
 		rows = append(rows, ui.Rule(width), ui.MutedStyle.Render("d: delete model"))
 	}
 	return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
-}
-
-func presetsHeader() string { return fmt.Sprintf("    %-16s %-40s %s", "Preset", "Model", "State") }
-
-func modelsHeader() string { return fmt.Sprintf("    %-40s %-10s %s", "Local model", "Size", "Use") }
-
-// truncateRunes clips text to limit runes if it's longer and limit is positive.
-func truncateRunes(text string, limit int) string {
-	if runed := []rune(text); limit > 0 && len(runed) > limit {
-		return string(runed[:limit])
-	}
-	return text
-}
-
-// selectRow applies the selected-row style, if selected.
-func selectRow(row string, selected bool, width int) string {
-	if selected {
-		return ui.SelectedRowStyle.Width(width).Render(row)
-	}
-	return row
-}
-
-func rowMarker(selected bool) string {
-	if selected {
-		return ">"
-	}
-	return " "
-}
-
-func localModelRow(model *controlv1.LocalModel, selected bool, width int) string {
-	used := ""
-	if len(model.GetUsedByPresets()) > 0 {
-		used = "in: " + strings.Join(model.GetUsedByPresets(), ",")
-	}
-	text := fmt.Sprintf("%-40.40s %-10s %s", model.GetFilename(), formatBytes(model.GetSizeBytes()), used)
-	text = truncateRunes(text, width-4)
-	return selectRow(rowMarker(selected)+" "+text, selected, width)
-}
-
-func presetRow(preset *presetView, runtime *controlv1.RuntimeStatus, selected bool, width int) string {
-	dot, dotStyle := "○", ui.MutedStyle
-	state := "Stopped"
-	if presetUnavailable(preset) {
-		dot, dotStyle, state = "!", warningStyle, "Unavailable"
-	} else if presetRunning(runtime, preset.Name) {
-		dot, dotStyle, state = "●", ui.GreenStyle, "Running"
-	}
-	text := fmt.Sprintf("%-16.16s %-40.40s %s", preset.Name, presetModel(preset), state)
-	text = truncateRunes(text, width-6)
-	if !selected {
-		dot = dotStyle.Render(dot)
-	}
-	return selectRow(rowMarker(selected)+" "+dot+" "+text, selected, width)
 }
 
 func presetUnavailable(preset *presetView) bool {

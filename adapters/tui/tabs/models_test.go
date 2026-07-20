@@ -43,29 +43,32 @@ func TestModelsTabShowsAndConfirmsUnavailablePresetCleanup(t *testing.T) {
 	if !ok || request.name != "broken" {
 		t.Fatalf("request = %#v", request)
 	}
-	if row := presetRow(&snapshot.presets[0], nil, false, 120); !strings.Contains(row, "Unavailable") {
-		t.Fatalf("row = %q", row)
+	if state := presetState(&snapshot.presets[0], nil); state != "Unavailable" {
+		t.Fatalf("state = %q", state)
 	}
 }
 
 func TestModelsTabNavigationCancelsPendingCleanup(t *testing.T) {
 	tab := NewModelsTab()
-	tab.selected, tab.pendingCleanup, tab.message, tab.err = 1, "broken", "stale success", "stale error"
 	snapshot := dashboardSnapshot{presets: []presetView{{Name: "first"}, {Name: "broken", SourceStatus: "unavailable"}}}
+	tab.Update(keyMsg("down"), snapshot) // cursor -> 1
+	tab.pendingCleanup, tab.message, tab.err = "broken", "stale success", "stale error"
 	tab.Update(keyMsg("up"), snapshot)
-	if tab.selected != 0 || tab.pendingCleanup != "" || tab.message != "" || tab.err != "" {
-		t.Fatalf("selected=%d pending=%q message=%q err=%q", tab.selected, tab.pendingCleanup, tab.message, tab.err)
+	if tab.presetTable.Cursor() != 0 || tab.pendingCleanup != "" || tab.message != "" || tab.err != "" {
+		t.Fatalf("cursor=%d pending=%q message=%q err=%q", tab.presetTable.Cursor(), tab.pendingCleanup, tab.message, tab.err)
 	}
 }
 
 func TestModelsTabClampsSelectionAfterPresetsShrink(t *testing.T) {
 	tab := NewModelsTab()
-	tab.selected = 2
-	snapshot := dashboardSnapshot{presets: []presetView{{Name: "only"}}}
-	cmd := tab.Update(keyMsg("enter"), snapshot)
+	big := dashboardSnapshot{presets: []presetView{{Name: "a"}, {Name: "b"}, {Name: "only"}}}
+	tab.Update(keyMsg("down"), big)
+	tab.Update(keyMsg("down"), big) // cursor -> 2
+	small := dashboardSnapshot{presets: []presetView{{Name: "only"}}}
+	cmd := tab.Update(keyMsg("enter"), small)
 	request := cmd().(presetStartRequestMsg)
-	if request.name != "only" || tab.selected != 0 {
-		t.Fatalf("selected=%d request=%q", tab.selected, request.name)
+	if request.name != "only" {
+		t.Fatalf("request=%q", request.name)
 	}
 }
 
@@ -80,15 +83,9 @@ func TestModelsViewShowsPresetFieldsAndHelp(t *testing.T) {
 	tab := NewModelsTab()
 	preset := &presetView{Name: "chat", Model: "/models/chat.gguf"}
 	view := tab.View(120, 20, dashboardSnapshot{presets: []presetView{*preset}})
-	for _, want := range []string{"Quick Help", "Enter Run"} {
+	for _, want := range []string{"Quick Help", "Enter Run", "chat", "chat.gguf", "Stopped"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
-		}
-	}
-	row := presetRow(preset, nil, false, 120)
-	for _, want := range []string{"chat", "chat.gguf", "Stopped"} {
-		if !strings.Contains(row, want) {
-			t.Fatalf("row missing %q: %s", want, row)
 		}
 	}
 }
