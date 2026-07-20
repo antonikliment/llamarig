@@ -31,15 +31,6 @@ func TestRuntimeLifecycleStub(t *testing.T) {
 		t.Fatalf("preset not running/ready: %#v", preset)
 	}
 
-	resources, err := client.GetRuntimeResources(ctx, &controlv1.GetRuntimeResourcesRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	requireOK(t, "GetRuntimeResources", resources.GetOk())
-	if resources.GetResources().GetTotalRamBytes() == 0 {
-		t.Fatalf("runtime resources missing memory")
-	}
-
 	restarted, err := client.RestartRuntime(ctx, &controlv1.RuntimeTargetRequest{Target: name})
 	if err != nil {
 		t.Fatal(err)

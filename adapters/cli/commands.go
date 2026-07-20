@@ -3,57 +3,58 @@ package cli
 import (
 	"context"
 	"fmt"
-	"slices"
+	"os"
+	"strings"
 
+	"github.com/spf13/cobra"
+	"llamarig/config"
 	controlv1 "llamarig/core/rpc/gen/v1"
 	"llamarig/core/rpc/gen/v1/controlv1connect"
 )
 
 type commandHandler func(c command, ctx context.Context, client controlv1connect.ControlServiceClient) error
 
-type CommandSpec struct {
-	Name, Usage, Short string
-	MinArgs, MaxArgs   int
+type commandSpec struct {
+	name, usage, short string
+	args               cobra.PositionalArgs
 	handler            commandHandler
 }
 
-// commandRegistry is the single source of truth for CLI command names and
-// their metadata and handlers, in registration order. cmd/cli.go registers
-// cobra commands from Commands; Run dispatches through the same table.
-var commandRegistry = []CommandSpec{
-	{Name: "info", Short: "Show control daemon information", MaxArgs: 0, handler: (command).runInfo},
-	{Name: "status", Short: "Show runtime status", MaxArgs: 0, handler: (command).runStatus},
-	{Name: "presets", Short: "List presets", MaxArgs: 0, handler: (command).runPresets},
-	{Name: "preset", Usage: "<name>", Short: "Show a preset", MinArgs: 1, MaxArgs: 1, handler: (command).runPreset},
-	{Name: "start", Usage: "[preset]", Short: "Start the requested or default preset", MaxArgs: 1, handler: (command).runAction},
-	{Name: "stop", Usage: "[preset]", Short: "Stop the requested or all running presets", MaxArgs: 1, handler: (command).runAction},
-	{Name: "restart", Usage: "[preset]", Short: "Restart the requested preset", MaxArgs: 1, handler: (command).runAction},
+// commandRegistry defines CLI metadata and handlers in display order.
+var commandRegistry = []commandSpec{
+	{name: "info", short: "Show control daemon information", args: cobra.NoArgs, handler: (command).runInfo},
+	{name: "status", short: "Show runtime status", args: cobra.NoArgs, handler: (command).runStatus},
+	{name: "presets", short: "List presets", args: cobra.NoArgs, handler: (command).runPresets},
+	{name: "preset", usage: "<name>", short: "Show a preset", args: cobra.ExactArgs(1), handler: (command).runPreset},
+	{name: "start", usage: "[preset]", short: "Start the requested or default preset", args: cobra.MaximumNArgs(1), handler: (command).runAction},
+	{name: "stop", usage: "[preset]", short: "Stop the requested or all running presets", args: cobra.MaximumNArgs(1), handler: (command).runAction},
+	{name: "restart", usage: "[preset]", short: "Restart the requested preset", args: cobra.MaximumNArgs(1), handler: (command).runAction},
 }
 
-func Commands() []CommandSpec { return slices.Clone(commandRegistry) }
-
-func lookupCommand(name string) (CommandSpec, bool) {
+func Commands() []*cobra.Command {
+	commands := make([]*cobra.Command, 0, len(commandRegistry))
 	for _, spec := range commandRegistry {
-		if spec.Name == name {
-			return spec, true
+		socket, jsonOut := "", false
+		cobraCmd := &cobra.Command{
+			Use: strings.TrimSpace(spec.name + " " + spec.usage), Short: spec.short, Args: spec.args, ValidArgsFunction: cobra.NoFileCompletions,
+			RunE: func(cobraCmd *cobra.Command, args []string) error {
+				socketPath := socket
+				if !cobraCmd.Flags().Changed("socket") {
+					socketPath = os.Getenv(config.ProjectSocketEnv)
+				}
+				c := command{name: spec.name, args: args, socket: socketPath, json: jsonOut, out: cobraCmd.OutOrStdout()}
+				client, err := c.controlClient()
+				if err != nil {
+					return err
+				}
+				return spec.handler(c, cobraCmd.Context(), client)
+			},
 		}
+		cobraCmd.Flags().StringVar(&socket, "socket", "", config.ProjectDisplayName+" control Unix socket")
+		cobraCmd.Flags().BoolVar(&jsonOut, "json", false, "print JSON")
+		commands = append(commands, cobraCmd)
 	}
-	return CommandSpec{}, false
-}
-
-func (c command) run(ctx context.Context) error {
-	entry, ok := lookupCommand(c.name)
-	if !ok {
-		return fmt.Errorf("unknown command %q", c.name)
-	}
-	if len(c.args) < entry.MinArgs || entry.MaxArgs >= 0 && len(c.args) > entry.MaxArgs {
-		return fmt.Errorf("invalid arguments for %q: received %d", c.name, len(c.args))
-	}
-	client, err := c.controlClient()
-	if err != nil {
-		return err
-	}
-	return entry.handler(c, ctx, client)
+	return commands
 }
 
 // respond prints jsonVal if JSON output was requested, else calls humanFn.

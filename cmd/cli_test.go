@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"llamarig/adapters/cli"
 	"llamarig/config"
 	controlv1 "llamarig/core/rpc/gen/v1"
 	"llamarig/core/rpc/gen/v1/controlv1connect"
@@ -59,6 +60,7 @@ func TestCLICommandArgumentValidation(t *testing.T) {
 		{"info", "extra"},
 		{"preset"},
 		{"start", "one", "two"},
+		{"missing"},
 	}
 	for _, args := range tests {
 		t.Run(strings.Join(args, "_"), func(t *testing.T) {
@@ -116,7 +118,7 @@ func TestCLISingleDashLongFlagIsRejected(t *testing.T) {
 }
 
 func TestCLICommandsExposeStaticMetadata(t *testing.T) {
-	for _, command := range cliCommands() {
+	for _, command := range cli.Commands() {
 		if command.Short == "" {
 			t.Errorf("%s has no Short description", command.Name())
 		}

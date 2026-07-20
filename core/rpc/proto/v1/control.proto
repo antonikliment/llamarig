@@ -16,7 +16,6 @@ service ControlService {
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 
   rpc GetRuntimeStatus(GetRuntimeStatusRequest) returns (GetRuntimeStatusResponse);
-  rpc GetRuntimeResources(GetRuntimeResourcesRequest) returns (GetRuntimeResourcesResponse);
   rpc GetLlamaServerParams(GetLlamaServerParamsRequest) returns (GetLlamaServerParamsResponse);
   rpc StartRuntime(RuntimeTargetRequest) returns (CommandResponse);
   rpc StopRuntime(RuntimeTargetRequest) returns (CommandResponse);
@@ -26,9 +25,7 @@ service ControlService {
   rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
   rpc WatchEvents(WatchEventsRequest) returns (stream Event);
 
-  rpc GetConfig(GetConfigRequest) returns (TextDocumentResponse);
-  rpc ValidateConfig(ValidateTextDocumentRequest) returns (ValidationResponse);
-  rpc ReplaceConfig(ReplaceTextDocumentRequest) returns (MutationResponse);
+  rpc SetStartupServices(SetStartupServicesRequest) returns (MutationResponse);
   rpc ListPresets(ListPresetsRequest) returns (ListPresetsResponse);
   rpc GetPreset(GetPresetRequest) returns (PresetResponse);
   rpc PutPreset(PutPresetRequest) returns (PresetResponse);

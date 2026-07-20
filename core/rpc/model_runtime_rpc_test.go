@@ -162,7 +162,7 @@ func TestRuntimeRPCRejectsNilTargetRequests(t *testing.T) {
 	}
 }
 
-func TestSignalsAndRuntimeResourcesMapDisks(t *testing.T) {
+func TestSignalsMapDisks(t *testing.T) {
 	temperature := 63.0
 	snapshot := signals.Snapshot{Disks: []signals.DiskStats{
 		{Label: "root", Path: "/", UsedBytes: 4, TotalBytes: 10, FreeBytes: 6, UsedPercent: 40},
@@ -176,44 +176,13 @@ func TestSignalsAndRuntimeResourcesMapDisks(t *testing.T) {
 	if len(signalsProto.GetGpu()) != 1 || signalsProto.GetGpu()[0].TemperatureCelsius == nil || signalsProto.GetGpu()[0].GetTemperatureCelsius() != temperature {
 		t.Fatalf("signals gpu = %#v", signalsProto.GetGpu())
 	}
-
-	resourcesProto := runtimeResourcesProto(snapshot)
-	if len(resourcesProto.GetDisks()) != 2 || resourcesProto.GetDisks()[0].GetUsedPercent() != 40 || resourcesProto.GetDisks()[1].GetFreeBytes() != 3 {
-		t.Fatalf("resource disks = %#v", resourcesProto.GetDisks())
-	}
 }
 
-func TestConfigRPCRejectsNilRequests(t *testing.T) {
+func TestConfigRPCRejectsNilRequest(t *testing.T) {
 	svc := NewControlService(RPCDependencies{Manager: control.NewManager(control.Dependencies{})})
-	ctx := context.Background()
-
-	tests := []struct {
-		name string
-		call func() error
-	}{
-		{
-			name: "validate config",
-			call: func() error {
-				_, err := svc.ValidateConfig(ctx, nil)
-				return err
-			},
-		},
-		{
-			name: "replace config",
-			call: func() error {
-				_, err := svc.ReplaceConfig(ctx, nil)
-				return err
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.call()
-			if ErrorKindFromRPC(err) != control.ErrorInvalidInput {
-				t.Fatalf("error kind = %q, want %q; err = %v", ErrorKindFromRPC(err), control.ErrorInvalidInput, err)
-			}
-		})
+	_, err := svc.SetStartupServices(context.Background(), nil)
+	if ErrorKindFromRPC(err) != control.ErrorInvalidInput {
+		t.Fatalf("error kind = %q, want %q; err = %v", ErrorKindFromRPC(err), control.ErrorInvalidInput, err)
 	}
 }
 

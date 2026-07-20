@@ -39,11 +39,7 @@ func TestPresetAutostartLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	requireOK(t, "DeletePreset", deleted.GetOk())
-	doc, err := client.GetConfig(ctx, &controlv1.GetConfigRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Parse([]byte(doc.GetContent()))
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,11 +64,7 @@ func setAndAssertAutostart(t *testing.T, client controlv1connect.ControlServiceC
 	if preset == nil || preset.GetAutostart() != enabled {
 		t.Fatalf("autostart=%v preset=%#v", enabled, preset)
 	}
-	doc, err := client.GetConfig(ctx, &controlv1.GetConfigRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Parse([]byte(doc.GetContent()))
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
 	}

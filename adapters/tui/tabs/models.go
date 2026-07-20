@@ -73,11 +73,8 @@ func (t *ModelsTab) updatePresets(key tea.KeyPressMsg, snapshot dashboardSnapsho
 	case (key.String() == "d" || key.String() == "y") && presetUnavailable(&presets[t.selected]):
 		return t.cleanupSelected(&presets[t.selected], key.String() == "y")
 	case bindkey.Matches(key, t.keys.RunAction) && !presetRunning(snapshot.runtime, presets[t.selected].Name):
-		if presetSourceBlocked(&presets[t.selected]) {
+		if presetUnavailable(&presets[t.selected]) {
 			t.err = presets[t.selected].SourceError
-			if presetChecking(&presets[t.selected]) {
-				t.err = "checking preset source"
-			}
 			return nil
 		}
 		name := presets[t.selected].Name
@@ -282,9 +279,7 @@ func presetDetail(width, height int, preset *presetView, runtime *controlv1.Runt
 		return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a preset to see details"))
 	}
 	state, stateColor, action := "Stopped", ui.Muted, ui.GreenStyle.Render("Enter: start preset")
-	if presetChecking(preset) {
-		state, stateColor, action = "Checking", ui.Yellow, ui.MutedStyle.Render("Checking preset source")
-	} else if presetUnavailable(preset) {
+	if presetUnavailable(preset) {
 		state, stateColor, action = "Unavailable", ui.Red, warningStyle.Render("d: cleanup preset")
 	} else if presetRunning(runtime, preset.Name) {
 		state, stateColor, action = "Running", ui.Green, ui.MutedStyle.Render("Running · stop from the Services tab")
@@ -364,9 +359,7 @@ func localModelRow(model *controlv1.LocalModel, selected bool, width int) string
 func presetRow(preset *presetView, runtime *controlv1.RuntimeStatus, selected bool, width int) string {
 	dot, dotStyle := "○", ui.MutedStyle
 	state := "Stopped"
-	if presetChecking(preset) {
-		dot, state = "…", "Checking"
-	} else if presetUnavailable(preset) {
+	if presetUnavailable(preset) {
 		dot, dotStyle, state = "!", warningStyle, "Unavailable"
 	} else if presetRunning(runtime, preset.Name) {
 		dot, dotStyle, state = "●", ui.GreenStyle, "Running"
@@ -381,14 +374,6 @@ func presetRow(preset *presetView, runtime *controlv1.RuntimeStatus, selected bo
 
 func presetUnavailable(preset *presetView) bool {
 	return preset != nil && preset.SourceStatus == "unavailable"
-}
-
-func presetChecking(preset *presetView) bool {
-	return preset != nil && preset.SourceStatus == "checking"
-}
-
-func presetSourceBlocked(preset *presetView) bool {
-	return presetUnavailable(preset) || presetChecking(preset)
 }
 
 func presetModel(preset *presetView) string {

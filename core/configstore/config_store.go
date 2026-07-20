@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"llamarig/config"
 	"llamarig/platform/filedoc"
@@ -23,15 +22,6 @@ var (
 	ErrTooLarge  = errors.New("config.yaml content exceeds size limit")
 	ErrMalformed = errors.New("config.yaml content is malformed")
 )
-
-type ConfigYAML struct {
-	Path      string        `json:"path"`
-	Content   string        `json:"content"`
-	Parsed    config.Config `json:"parsed"`
-	SizeBytes int64         `json:"size_bytes"`
-	ModTime   time.Time     `json:"mod_time"`
-	SHA256    string        `json:"sha256"`
-}
 
 // RemoveRouterPresetReferences removes names from router.default_preset and
 // router.autostart_presets while preserving unrelated YAML nodes and comments.
@@ -256,12 +246,9 @@ func NewFileStore(path string, limitBytes int64) *FileStore {
 	return &FileStore{path: filepath.Clean(path), limitBytes: limitBytes}
 }
 
-func (s *FileStore) Read(_ context.Context) (ConfigYAML, error) {
-	info, data, parsed, err := s.readParsed()
-	if err != nil {
-		return ConfigYAML{}, err
-	}
-	return ConfigYAML{Path: s.path, Content: string(data), Parsed: parsed, SizeBytes: int64(len(data)), ModTime: info.ModTime().UTC(), SHA256: filedoc.SHA256Hex(data)}, nil
+func (s *FileStore) Read(_ context.Context) (config.Config, error) {
+	_, _, parsed, err := s.readParsed()
+	return parsed, err
 }
 
 func (s *FileStore) Validate(_ context.Context, content string) error {
@@ -276,15 +263,6 @@ func (s *FileStore) Validate(_ context.Context, content string) error {
 		return fmt.Errorf("%w: %w", ErrMalformed, err)
 	}
 	return nil
-}
-
-func (s *FileStore) Replace(ctx context.Context, content string) (WriteResult, error) {
-	if err := s.Validate(ctx, content); err != nil {
-		return WriteResult{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.replaceLocked(content)
 }
 
 func (s *FileStore) readParsed() (os.FileInfo, []byte, config.Config, error) {

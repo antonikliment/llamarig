@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/spf13/cobra"
 	controlv1 "llamarig/core/rpc/gen/v1"
 	"llamarig/core/rpc/gen/v1/controlv1connect"
 )
@@ -66,9 +67,12 @@ func runCommand(t *testing.T, socketPath string, test runCommandTest, jsonOut bo
 	}
 	t.Run(test.name+"/"+mode, func(t *testing.T) {
 		var out strings.Builder
-		err := Run(context.Background(), Options{
-			Command: test.name, Args: test.args, Socket: socketPath, JSON: jsonOut, Out: &out,
-		})
+		args := append([]string{test.name}, test.args...)
+		args = append(args, "--socket", socketPath)
+		if jsonOut {
+			args = append(args, "--json")
+		}
+		err := executeCLI(context.Background(), args, &out)
 		if err != nil {
 			t.Fatalf("Run: %v", err)
 		}
@@ -91,30 +95,38 @@ func assertActionTargets(t *testing.T, targets []string) {
 }
 
 func TestRunValidatesBeforeDialing(t *testing.T) {
-	tests := []Options{
-		{Command: "info", Args: []string{"extra"}},
-		{Command: "preset"},
-		{Command: "start", Args: []string{"one", "two"}},
-		{Command: "missing"},
+	tests := [][]string{
+		{"info", "extra"},
+		{"preset"},
+		{"start", "one", "two"},
 	}
-	for _, opts := range tests {
-		if err := Run(context.Background(), opts); err == nil {
-			t.Fatalf("Run(%q, %v) returned nil", opts.Command, opts.Args)
+	for _, args := range tests {
+		if err := executeCLI(context.Background(), args, &strings.Builder{}); err == nil {
+			t.Fatalf("executeCLI(%v) returned nil", args)
 		}
 	}
 }
 
 func TestCommandsReturnsRegistrationOrder(t *testing.T) {
-	specs := Commands()
+	commands := Commands()
 	want := []string{"info", "status", "presets", "preset", "start", "stop", "restart"}
-	if len(specs) != len(want) {
-		t.Fatalf("len(Commands())=%d want=%d", len(specs), len(want))
+	if len(commands) != len(want) {
+		t.Fatalf("len(Commands())=%d want=%d", len(commands), len(want))
 	}
 	for i, name := range want {
-		if specs[i].Name != name {
-			t.Fatalf("Commands()[%d].Name=%q want=%q", i, specs[i].Name, name)
+		if commands[i].Name() != name {
+			t.Fatalf("Commands()[%d].Name=%q want=%q", i, commands[i].Name(), name)
 		}
 	}
+}
+
+func executeCLI(ctx context.Context, args []string, out *strings.Builder) error {
+	root := &cobra.Command{Use: "test", Args: cobra.NoArgs}
+	root.AddCommand(Commands()...)
+	root.SetArgs(args)
+	root.SetOut(out)
+	root.SetErr(out)
+	return root.ExecuteContext(ctx)
 }
 
 type fakeCLIControl struct {

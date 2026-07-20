@@ -47,7 +47,6 @@ type ControlService struct {
 	modelDownloader modeldownload.Downloader
 	events          *control.EventStore
 	serviceName     string
-	presetSources   *presetSourceCache
 }
 
 func NewControlService(deps RPCDependencies) *ControlService {
@@ -70,7 +69,6 @@ func NewControlService(deps RPCDependencies) *ControlService {
 		modelDownloader: deps.ModelDownloader,
 		events:          deps.Events,
 		serviceName:     serviceName,
-		presetSources:   newPresetSourceCache(),
 	}
 }
 
@@ -111,10 +109,6 @@ func signalsSnapshotProto(snapshot signals.Snapshot) *controlv1.SignalsSnapshot 
 		Memory: &controlv1.MemorySnapshot{AvailableBytes: snapshot.Memory.AvailableBytes, TotalBytes: snapshot.Memory.TotalBytes, UsedBytes: snapshot.Memory.UsedBytes, UsedPercent: snapshot.Memory.UsedPercent},
 		Disks:  diskSnapshotProtos(snapshot.Disks), Cpu: &controlv1.CPUSnapshot{LogicalCores: int32(snapshot.CPU.LogicalCores), UsedPercent: snapshot.CPU.UsedPercent}, Gpu: gpuSnapshotProtos(snapshot.GPU), Runtime: runtimeProcessSnapshotProtos(snapshot.Runtime), Warnings: snapshot.Warnings,
 	}
-}
-
-func runtimeResourcesProto(snapshot signals.Snapshot) *controlv1.RuntimeResources {
-	return &controlv1.RuntimeResources{AvailableRamBytes: snapshot.Memory.AvailableBytes, TotalRamBytes: snapshot.Memory.TotalBytes, UsedRamBytes: snapshot.Memory.UsedBytes, MemoryUsedPercent: snapshot.Memory.UsedPercent, CpuLogicalCores: int32(snapshot.CPU.LogicalCores), CpuUsedPercent: snapshot.CPU.UsedPercent, Disks: diskSnapshotProtos(snapshot.Disks), Gpu: gpuSnapshotProtos(snapshot.GPU), Runtime: runtimeProcessSnapshotProtos(snapshot.Runtime), Warnings: snapshot.Warnings}
 }
 
 func gpuSnapshotProtos(gpus []signals.GPUStats) []*controlv1.GPUSnapshot {

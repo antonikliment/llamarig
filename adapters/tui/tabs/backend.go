@@ -10,7 +10,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 	"llamarig/config"
-	"llamarig/core/configstore"
 	controlv1 "llamarig/core/rpc/gen/v1"
 	"llamarig/core/rpc/gen/v1/controlv1connect"
 	"llamarig/platform/audit"
@@ -24,7 +23,7 @@ type dashboardSnapshot struct {
 	gateway     process.DetachedStatus
 	config      config.Config
 	runtime     *controlv1.RuntimeStatus
-	resources   *controlv1.RuntimeResources
+	resources   *controlv1.SignalsSnapshot
 	presets     []presetView
 	localModels []*controlv1.LocalModel
 	warnings    map[string]string
@@ -77,7 +76,7 @@ func (b dashboardBackend) poll() tea.Cmd {
 		ctx, cancel := context.WithTimeout(b.ctx, 2*time.Second)
 		defer cancel()
 		var runtime fetchResult[*controlv1.RuntimeStatus]
-		var resources fetchResult[*controlv1.RuntimeResources]
+		var resources fetchResult[*controlv1.SignalsSnapshot]
 		var presets fetchResult[[]presetView]
 		var localModels fetchResult[[]*controlv1.LocalModel]
 		group, groupCtx := errgroup.WithContext(ctx)
@@ -87,8 +86,8 @@ func (b dashboardBackend) poll() tea.Cmd {
 			return nil
 		})
 		group.Go(func() error {
-			out, err := b.client.GetRuntimeResources(groupCtx, &controlv1.GetRuntimeResourcesRequest{})
-			resources = fetched(out.GetResources(), err)
+			out, err := b.client.GetSignals(groupCtx, &controlv1.GetSignalsRequest{})
+			resources = fetched(out.GetSignals(), err)
 			return nil
 		})
 		group.Go(func() error {
@@ -270,7 +269,7 @@ func (b dashboardBackend) run(request actionRequestMsg, cfg config.Config) tea.C
 			if request.index == 2 {
 				err = openBrowser(publicBaseURL(cfg.ListenAddr))
 			} else if err = runProcessAction("gateway", request.index, []string{"gateway", "--foreground"}); err == nil {
-				err = persistGatewayStartup(b.ctx, cfg, request.index == 0)
+				err = b.persistGatewayStartup(cfg, request.index == 0)
 			}
 		case actionRuntime:
 			if b.client == nil {
@@ -285,7 +284,7 @@ func (b dashboardBackend) run(request actionRequestMsg, cfg config.Config) tea.C
 
 // persistGatewayStartup records whether the web gateway should auto-start on
 // the next TUI launch, so an explicit Stop in the TUI is remembered.
-func persistGatewayStartup(ctx context.Context, cfg config.Config, enabled bool) error {
+func (b dashboardBackend) persistGatewayStartup(cfg config.Config, enabled bool) error {
 	base := cfg.StartupServices
 	if len(base) == 0 {
 		base = config.DefaultStartupServices()
@@ -297,11 +296,10 @@ func persistGatewayStartup(ctx context.Context, cfg config.Config, enabled bool)
 	if slices.Equal(desired, base) {
 		return nil
 	}
-	path, err := config.ConfigPath()
-	if err != nil {
-		return err
+	if b.client == nil {
+		return fmt.Errorf("control socket not available")
 	}
-	_, err = configstore.NewFileStore(path, configstore.DefaultLimitBytes).SetStartupServices(ctx, desired)
+	_, err := b.client.SetStartupServices(b.ctx, &controlv1.SetStartupServicesRequest{Services: desired})
 	return err
 }
 

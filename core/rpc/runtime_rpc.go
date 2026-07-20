@@ -15,14 +15,6 @@ func (s *ControlService) GetRuntimeStatus(ctx context.Context, _ *controlv1.GetR
 	return &controlv1.GetRuntimeStatusResponse{Ok: true, Status: runtimeStatusProto(status)}, nil
 }
 
-func (s *ControlService) GetRuntimeResources(ctx context.Context, _ *controlv1.GetRuntimeResourcesRequest) (*controlv1.GetRuntimeResourcesResponse, error) {
-	snapshot, err := s.snapshot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &controlv1.GetRuntimeResourcesResponse{Ok: true, Resources: runtimeResourcesProto(snapshot)}, nil
-}
-
 // snapshot captures a signals snapshot, returning a mapped RPC error when the
 // collector is unconfigured or the capture fails.
 func (s *ControlService) snapshot(ctx context.Context) (signals.Snapshot, error) {

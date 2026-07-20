@@ -120,10 +120,6 @@ func (nilControlClient) GetRuntimeStatus(context.Context, *controlv1.GetRuntimeS
 	return nil, nil
 }
 
-func (nilControlClient) GetRuntimeResources(context.Context, *controlv1.GetRuntimeResourcesRequest) (*controlv1.GetRuntimeResourcesResponse, error) {
-	return nil, nil
-}
-
 func (nilControlClient) GetLlamaServerParams(context.Context, *controlv1.GetLlamaServerParamsRequest) (*controlv1.GetLlamaServerParamsResponse, error) {
 	return nil, nil
 }
@@ -152,15 +148,7 @@ func (nilControlClient) WatchEvents(context.Context, *controlv1.WatchEventsReque
 	return nil, nil
 }
 
-func (nilControlClient) GetConfig(context.Context, *controlv1.GetConfigRequest) (*controlv1.TextDocumentResponse, error) {
-	return nil, nil
-}
-
-func (nilControlClient) ValidateConfig(context.Context, *controlv1.ValidateTextDocumentRequest) (*controlv1.ValidationResponse, error) {
-	return nil, nil
-}
-
-func (nilControlClient) ReplaceConfig(context.Context, *controlv1.ReplaceTextDocumentRequest) (*controlv1.MutationResponse, error) {
+func (nilControlClient) SetStartupServices(context.Context, *controlv1.SetStartupServicesRequest) (*controlv1.MutationResponse, error) {
 	return nil, nil
 }
 
@@ -224,8 +212,8 @@ func (nilControlClient) SetPresetAutostart(context.Context, *controlv1.PresetAut
 	return nil, nil
 }
 
-func (fakeControlRPC) GetConfig(context.Context, *controlv1.GetConfigRequest) (*controlv1.TextDocumentResponse, error) {
-	return &controlv1.TextDocumentResponse{Ok: true, Content: "listen_addr: 127.0.0.1:9999\n"}, nil
+func (fakeControlRPC) SetStartupServices(context.Context, *controlv1.SetStartupServicesRequest) (*controlv1.MutationResponse, error) {
+	return &controlv1.MutationResponse{Ok: true}, nil
 }
 
 func TestHTTPNilRPCResponsesReturnRuntimeErrors(t *testing.T) {

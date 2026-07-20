@@ -8,7 +8,7 @@ import (
 )
 
 func TestSystemResourcesDetailPanelRendersAllDisks(t *testing.T) {
-	view := systemResourcesDetailPanel(80, 10, &controlv1.RuntimeResources{Disks: []*controlv1.DiskSnapshot{
+	view := systemResourcesDetailPanel(80, 10, &controlv1.SignalsSnapshot{Disks: []*controlv1.DiskSnapshot{
 		{Label: "root", Path: "/", UsedPercent: 41, UsedBytes: 41 * 1024 * 1024 * 1024, TotalBytes: 100 * 1024 * 1024 * 1024},
 		{Label: "model_storage", Path: "/models", UsedPercent: 42, UsedBytes: 194 * 1024 * 1024 * 1024, TotalBytes: 458 * 1024 * 1024 * 1024},
 	}}, "")
@@ -29,7 +29,7 @@ func TestSystemResourcesPanelRendersSocketWarning(t *testing.T) {
 }
 
 func TestSystemResourcesPanelRendersRPCWarningsWhenGPUUnavailable(t *testing.T) {
-	view := systemResourcesDetailPanel(80, 8, &controlv1.RuntimeResources{Warnings: []string{"GPU telemetry unavailable"}}, "")
+	view := systemResourcesDetailPanel(80, 8, &controlv1.SignalsSnapshot{Warnings: []string{"GPU telemetry unavailable"}}, "")
 
 	if !strings.Contains(view, "GPU telemetry unavailable") {
 		t.Fatalf("panel missing RPC warning:\n%s", view)

@@ -12,7 +12,6 @@ import (
 
 const (
 	SourceReady       = "ready"
-	SourceChecking    = "checking"
 	SourceUnavailable = "unavailable"
 )
 

@@ -110,8 +110,8 @@ func (m *Manager) GetInfo(ctx context.Context) (RuntimeInfo, error) {
 
 func (m *Manager) routerConfigSnapshot(ctx context.Context) config.RouterConfig {
 	if m.config != nil {
-		if document, err := m.config.Read(ctx); err == nil {
-			return document.Parsed.Router
+		if cfg, err := m.config.Read(ctx); err == nil {
+			return cfg.Router
 		}
 	}
 	cfg := m.routerConfig
