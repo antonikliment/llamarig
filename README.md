@@ -28,8 +28,10 @@ one of the methods below.
 ### Install script
 
 The installer detects your OS/arch, downloads the matching release archive,
-verifies its checksum, and installs the binary. It can also set you up to run in
-Docker instead (it asks when run interactively):
+verifies its checksum, and installs the binary plus an `lr` shortcut. If `lr`
+is already a command or occupies the install path, the installer leaves it
+untouched. The installer can also set you up to run in Docker instead (it asks
+when run interactively):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/antonikliment/llamarig/main/scripts/install.sh | sh
@@ -54,6 +56,7 @@ grep ' llamarig_<version>_darwin_<arch>.tar.gz$' SHA256SUMS | shasum -a 256 --ch
 
 tar -xzf llamarig_<version>_<os>_<arch>.tar.gz
 install -m 0755 llamarig_<version>_<os>_<arch>/llamarig ~/.local/bin/llamarig
+command -v lr >/dev/null 2>&1 || test -e ~/.local/bin/lr || test -L ~/.local/bin/lr || ln -s llamarig ~/.local/bin/lr
 llamarig version
 ```
 
