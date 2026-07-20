@@ -35,20 +35,20 @@ func (t *SystemTab) View(width, height int, snapshot dashboardSnapshot) string {
 	return ui.VerticalSlice(content, t.scroll, height)
 }
 
-func renderSystem(width int, resources *controlv1.RuntimeResources, warning string) string {
+func renderSystem(width int, resources *controlv1.SignalsSnapshot, warning string) string {
 	// The footer already renders connection warnings, so the tab body shows
 	// the resource panel alone instead of a second, redundant status line.
 	return systemResourcesDetailPanel(width-4, 10, resources, warning)
 }
 
-func systemResourcesDetailPanel(width int, height int, resources *controlv1.RuntimeResources, warning string) string {
+func systemResourcesDetailPanel(width int, height int, resources *controlv1.SignalsSnapshot, warning string) string {
 	content := []string{resourceStyle.Render("System Resources")}
 	if warning != "" || resources == nil {
 		content = append(content, warningStyle.Render("Warning: control socket not available"))
 	} else {
 		content = append(content,
-			resourceRow("CPU", resources.GetCpuUsedPercent(), ""),
-			resourceRow("RAM", resources.GetMemoryUsedPercent(), bytePair(resources.GetUsedRamBytes(), resources.GetTotalRamBytes())),
+			resourceRow("CPU", resources.GetCpu().GetUsedPercent(), ""),
+			resourceRow("RAM", resources.GetMemory().GetUsedPercent(), bytePair(resources.GetMemory().GetUsedBytes(), resources.GetMemory().GetTotalBytes())),
 			gpuRow(resources),
 		)
 		content = append(content, diskDetailRows(resources)...)
@@ -98,7 +98,7 @@ func bytePair(used uint64, total uint64) string {
 	return fmt.Sprintf("(%s/%s)", formatBytes(int64(used)), formatBytes(int64(total)))
 }
 
-func gpuRow(resources *controlv1.RuntimeResources) string {
+func gpuRow(resources *controlv1.SignalsSnapshot) string {
 	gpus := resources.GetGpu()
 	if len(gpus) == 0 {
 		detail := "(unavailable)"
@@ -115,7 +115,7 @@ func gpuRow(resources *controlv1.RuntimeResources) string {
 	return resourceRow("GPU", gpu.GetUtilizationPercent(), detail)
 }
 
-func diskDetailRows(resources *controlv1.RuntimeResources) []string {
+func diskDetailRows(resources *controlv1.SignalsSnapshot) []string {
 	disks := resources.GetDisks()
 	if len(disks) == 0 {
 		return []string{resourceRow("Disk", 0, "(unavailable)")}

@@ -120,10 +120,6 @@ func (nilControlClient) GetRuntimeStatus(context.Context, *controlv1.GetRuntimeS
 	return nil, nil
 }
 
-func (nilControlClient) GetRuntimeResources(context.Context, *controlv1.GetRuntimeResourcesRequest) (*controlv1.GetRuntimeResourcesResponse, error) {
-	return nil, nil
-}
-
 func (nilControlClient) GetLlamaServerParams(context.Context, *controlv1.GetLlamaServerParamsRequest) (*controlv1.GetLlamaServerParamsResponse, error) {
 	return nil, nil
 }

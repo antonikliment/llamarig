@@ -23,7 +23,7 @@ type dashboardSnapshot struct {
 	gateway     process.DetachedStatus
 	config      config.Config
 	runtime     *controlv1.RuntimeStatus
-	resources   *controlv1.RuntimeResources
+	resources   *controlv1.SignalsSnapshot
 	presets     []presetView
 	localModels []*controlv1.LocalModel
 	warnings    map[string]string
@@ -76,7 +76,7 @@ func (b dashboardBackend) poll() tea.Cmd {
 		ctx, cancel := context.WithTimeout(b.ctx, 2*time.Second)
 		defer cancel()
 		var runtime fetchResult[*controlv1.RuntimeStatus]
-		var resources fetchResult[*controlv1.RuntimeResources]
+		var resources fetchResult[*controlv1.SignalsSnapshot]
 		var presets fetchResult[[]presetView]
 		var localModels fetchResult[[]*controlv1.LocalModel]
 		group, groupCtx := errgroup.WithContext(ctx)
@@ -86,8 +86,8 @@ func (b dashboardBackend) poll() tea.Cmd {
 			return nil
 		})
 		group.Go(func() error {
-			out, err := b.client.GetRuntimeResources(groupCtx, &controlv1.GetRuntimeResourcesRequest{})
-			resources = fetched(out.GetResources(), err)
+			out, err := b.client.GetSignals(groupCtx, &controlv1.GetSignalsRequest{})
+			resources = fetched(out.GetSignals(), err)
 			return nil
 		})
 		group.Go(func() error {

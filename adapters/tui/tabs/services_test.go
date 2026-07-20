@@ -174,7 +174,7 @@ func TestHTTPActionsHighlightOnlyWhenFocused(t *testing.T) {
 
 func TestMergeSnapshotPreservesFailedSections(t *testing.T) {
 	oldRuntime := &controlv1.RuntimeStatus{State: "running"}
-	old := dashboardSnapshot{runtime: oldRuntime, resources: &controlv1.RuntimeResources{}, warnings: map[string]string{}}
+	old := dashboardSnapshot{runtime: oldRuntime, resources: &controlv1.SignalsSnapshot{}, warnings: map[string]string{}}
 	got := mergeSnapshot(old, pollResult{snapshot: dashboardSnapshot{warnings: map[string]string{"runtime": "down"}}})
 	if got.runtime != oldRuntime || got.resources != old.resources {
 		t.Fatal("failed refresh discarded stale data")

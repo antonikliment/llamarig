@@ -111,10 +111,6 @@ func signalsSnapshotProto(snapshot signals.Snapshot) *controlv1.SignalsSnapshot 
 	}
 }
 
-func runtimeResourcesProto(snapshot signals.Snapshot) *controlv1.RuntimeResources {
-	return &controlv1.RuntimeResources{AvailableRamBytes: snapshot.Memory.AvailableBytes, TotalRamBytes: snapshot.Memory.TotalBytes, UsedRamBytes: snapshot.Memory.UsedBytes, MemoryUsedPercent: snapshot.Memory.UsedPercent, CpuLogicalCores: int32(snapshot.CPU.LogicalCores), CpuUsedPercent: snapshot.CPU.UsedPercent, Disks: diskSnapshotProtos(snapshot.Disks), Gpu: gpuSnapshotProtos(snapshot.GPU), Runtime: runtimeProcessSnapshotProtos(snapshot.Runtime), Warnings: snapshot.Warnings}
-}
-
 func gpuSnapshotProtos(gpus []signals.GPUStats) []*controlv1.GPUSnapshot {
 	return mapProto(gpus, func(gpu signals.GPUStats) *controlv1.GPUSnapshot {
 		return &controlv1.GPUSnapshot{Name: gpu.Name, Backend: gpu.Backend, TotalVramBytes: gpu.TotalVRAMBytes, UsedVramBytes: gpu.UsedVRAMBytes, UtilizationPercent: gpu.UtilizationPercent, Source: gpu.Source, TemperatureCelsius: gpu.TemperatureCelsius}

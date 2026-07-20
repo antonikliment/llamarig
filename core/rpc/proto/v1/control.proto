@@ -16,7 +16,6 @@ service ControlService {
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
 
   rpc GetRuntimeStatus(GetRuntimeStatusRequest) returns (GetRuntimeStatusResponse);
-  rpc GetRuntimeResources(GetRuntimeResourcesRequest) returns (GetRuntimeResourcesResponse);
   rpc GetLlamaServerParams(GetLlamaServerParamsRequest) returns (GetLlamaServerParamsResponse);
   rpc StartRuntime(RuntimeTargetRequest) returns (CommandResponse);
   rpc StopRuntime(RuntimeTargetRequest) returns (CommandResponse);

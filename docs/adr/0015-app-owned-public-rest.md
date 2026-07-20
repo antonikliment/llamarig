@@ -12,7 +12,7 @@ The public gateway's `/api/*` routes were described as compatibility REST, but t
 
 The public `/api/*` REST facade is app-owned, not a stable third-party API. A route may be removed with its bundled web consumer when no other supported in-repository consumer remains. External automation should use the CLI or MCP.
 
-The ControlService RPC on the Unix socket remains the internal contract between protocol adapters. Internal RPC operations may remain even when their public REST adapter is removed; this is why `GetRuntimeResources` remains available to the TUI.
+The ControlService RPC on the Unix socket remains the internal contract between protocol adapters. The TUI and web gateway share `GetSignals` rather than maintaining separate telemetry projections.
 
 The unused `/api/runtime/resources` and `/api/config.yaml*` routes are removed. The deprecated apply-download `restart` field is removed; callers explicitly start a runtime when desired, while the existing automatic Router source refresh remains unchanged.
 
