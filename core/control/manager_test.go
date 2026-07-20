@@ -13,12 +13,12 @@ import (
 	"llamarig/core/runtime"
 )
 
-func TestManagerConfigReplace(t *testing.T) {
+func TestManagerSetStartupServices(t *testing.T) {
 	path := writeControlConfig(t, "listen_addr: \"127.0.0.1:7000\"\n")
 	manager := NewManager(Dependencies{Config: configstore.NewFileStore(path, configstore.DefaultLimitBytes)})
-	result, err := manager.ReplaceConfigYAML(context.Background(), "listen_addr: \"127.0.0.1:7100\"\n")
+	result, err := manager.SetStartupServices(context.Background(), []string{config.StartupServiceControl})
 	if err != nil {
-		t.Fatalf("ReplaceConfigYAML returned error: %v", err)
+		t.Fatalf("SetStartupServices returned error: %v", err)
 	}
 	if result.BackupPath == "" {
 		t.Fatalf("result = %#v", result)

@@ -11,7 +11,7 @@ import (
 	"llamarig/config"
 )
 
-func TestFileStoreReadAndReplace(t *testing.T) {
+func TestFileStoreRead(t *testing.T) {
 	path := writeConfig(t, `listen_addr: "127.0.0.1:7000"
 router:
   default_preset: "default"
@@ -23,26 +23,8 @@ router:
 	if err != nil {
 		t.Fatalf("Read returned error: %v", err)
 	}
-	if cfg.Content == "" || cfg.SHA256 == "" || cfg.Parsed.Router.DefaultPreset != "default" {
+	if cfg.Router.DefaultPreset != "default" {
 		t.Fatalf("cfg = %#v", cfg)
-	}
-
-	result, err := store.Replace(ctx, `listen_addr: "127.0.0.1:7100"
-router:
-  default_preset: "qwen"
-`)
-	if err != nil {
-		t.Fatalf("Replace returned error: %v", err)
-	}
-	if result.BackupPath == "" || result.SHA256 == "" {
-		t.Fatalf("result = %#v", result)
-	}
-	backup, err := os.ReadFile(result.BackupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(backup), `default`) {
-		t.Fatalf("backup = %s", backup)
 	}
 }
 
@@ -66,8 +48,8 @@ func TestRemoveRouterPresetReferencesPreservesUnrelatedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	document, err := store.Read(context.Background())
-	if err != nil || document.Parsed.Router.DefaultPreset != "" || len(document.Parsed.Router.AutostartPresets) != 1 || document.Parsed.Router.AutostartPresets[0] != "keep" {
-		t.Fatalf("config=%#v error=%v", document.Parsed.Router, err)
+	if err != nil || document.Router.DefaultPreset != "" || len(document.Router.AutostartPresets) != 1 || document.Router.AutostartPresets[0] != "keep" {
+		t.Fatalf("config=%#v error=%v", document.Router, err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -104,7 +86,7 @@ func runAutostartCase(t *testing.T, tc autostartCase) {
 		t.Fatal(err)
 	}
 	doc, _ := store.Read(ctx)
-	got := doc.Parsed.Router.AutostartPresets
+	got := doc.Router.AutostartPresets
 	if len(got) != len(tc.wantPresets) {
 		t.Fatalf("got %v, want %v", got, tc.wantPresets)
 	}
@@ -172,7 +154,7 @@ func TestSetStartupServicesPreservesDocument(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc, err := store.Read(context.Background())
-	if err != nil || len(doc.Parsed.StartupServices) != 1 || doc.Parsed.StartupServices[0] != config.StartupServiceControl {
+	if err != nil || len(doc.StartupServices) != 1 || doc.StartupServices[0] != config.StartupServiceControl {
 		t.Fatalf("document=%#v error=%v", doc, err)
 	}
 	data, _ := os.ReadFile(path)

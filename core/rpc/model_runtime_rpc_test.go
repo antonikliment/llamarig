@@ -183,37 +183,11 @@ func TestSignalsAndRuntimeResourcesMapDisks(t *testing.T) {
 	}
 }
 
-func TestConfigRPCRejectsNilRequests(t *testing.T) {
+func TestConfigRPCRejectsNilRequest(t *testing.T) {
 	svc := NewControlService(RPCDependencies{Manager: control.NewManager(control.Dependencies{})})
-	ctx := context.Background()
-
-	tests := []struct {
-		name string
-		call func() error
-	}{
-		{
-			name: "validate config",
-			call: func() error {
-				_, err := svc.ValidateConfig(ctx, nil)
-				return err
-			},
-		},
-		{
-			name: "replace config",
-			call: func() error {
-				_, err := svc.ReplaceConfig(ctx, nil)
-				return err
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.call()
-			if ErrorKindFromRPC(err) != control.ErrorInvalidInput {
-				t.Fatalf("error kind = %q, want %q; err = %v", ErrorKindFromRPC(err), control.ErrorInvalidInput, err)
-			}
-		})
+	_, err := svc.SetStartupServices(context.Background(), nil)
+	if ErrorKindFromRPC(err) != control.ErrorInvalidInput {
+		t.Fatalf("error kind = %q, want %q; err = %v", ErrorKindFromRPC(err), control.ErrorInvalidInput, err)
 	}
 }
 

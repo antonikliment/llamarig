@@ -4,21 +4,6 @@ package llamarig.control.v1;
 
 option go_package = "llamarig/core/rpc/gen/v1;controlv1";
 
-message GetConfigRequest {}
-
-message TextDocumentResponse {
-  bool ok = 1;
-  string content = 2;
-  string path = 3;
-  int64 size_bytes = 4;
-  string mod_time = 5;
-  string sha256 = 6;
-}
-
-message ValidateTextDocumentRequest {
-  string content = 1;
-}
-
-message ReplaceTextDocumentRequest {
-  string content = 1;
+message SetStartupServicesRequest {
+  repeated string services = 1;
 }
