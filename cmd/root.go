@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"llamarig/adapters/cli"
 	"llamarig/config"
 	"llamarig/internal/buildinfo"
 
@@ -14,7 +15,7 @@ func Execute() error {
 }
 
 func NewRootCommand() *cobra.Command {
-	rootCmd := &cobra.Command{Use: config.ProjectName, Version: buildinfo.Version, CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true}, RunE: func(cmd *cobra.Command, args []string) error { return runTUI(cmd) }}
+	rootCmd := &cobra.Command{Use: config.ProjectName, Args: cobra.NoArgs, Version: buildinfo.Version, CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true}, RunE: func(cmd *cobra.Command, args []string) error { return runTUI(cmd) }}
 
 	rootCmd.AddCommand(serveCommand())
 	rootCmd.AddCommand(gatewayCommand())
@@ -23,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(downCommand)
 	rootCmd.AddCommand(logsCommand(config.ProjectName, true))
 	rootCmd.AddCommand(tuiCommand)
-	rootCmd.AddCommand(cliCommands()...)
+	rootCmd.AddCommand(cli.Commands()...)
 
 	return rootCmd
 }
