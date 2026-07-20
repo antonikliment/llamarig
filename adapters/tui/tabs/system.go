@@ -2,12 +2,12 @@ package tabs
 
 import (
 	"fmt"
-	"image/color"
 	"llamarig/adapters/tui/ui"
 	"math"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	controlv1 "llamarig/core/rpc/gen/v1"
@@ -70,25 +70,10 @@ func resourceRow(label string, percent float64, detail string) string {
 	return row
 }
 
-func resourceMeter(percent int) string {
-	const segments = 20
-	percent = max(0, min(100, percent))
-	filled := percent * segments / 100
-	bar := lipgloss.NewStyle().Foreground(meterColor(percent)).Render(strings.Repeat("█", filled))
-	return bar + ui.MutedStyle.Render(strings.Repeat("░", segments-filled))
-}
+var meter = progress.New(progress.WithWidth(20), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage(), progress.WithColors(ui.Green))
 
-// meterColor shades a meter green/yellow/red by load so the fill conveys
-// severity through shape and hue, not the cyan-only block of the old bars.
-func meterColor(percent int) color.Color {
-	switch {
-	case percent >= 90:
-		return ui.Red
-	case percent >= 70:
-		return ui.Yellow
-	default:
-		return ui.Green
-	}
+func resourceMeter(percent int) string {
+	return meter.ViewAs(float64(max(0, min(100, percent))) / 100)
 }
 
 func bytePair(used uint64, total uint64) string {
