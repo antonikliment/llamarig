@@ -91,7 +91,7 @@ func (s *ControlService) SetPresetAutostart(ctx context.Context, req *controlv1.
 }
 
 func (s *ControlService) presetProto(section modelpresets.Section) *controlv1.ModelPreset {
-	status := s.presetSources.status(section)
+	status := modelpresets.InspectSource(section)
 	return &controlv1.ModelPreset{Name: section.Name, Entries: presetEntries(section), SourceStatus: status.State, SourceError: status.Error}
 }
 

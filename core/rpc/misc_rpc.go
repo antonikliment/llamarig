@@ -47,7 +47,6 @@ type ControlService struct {
 	modelDownloader modeldownload.Downloader
 	events          *control.EventStore
 	serviceName     string
-	presetSources   *presetSourceCache
 }
 
 func NewControlService(deps RPCDependencies) *ControlService {
@@ -70,7 +69,6 @@ func NewControlService(deps RPCDependencies) *ControlService {
 		modelDownloader: deps.ModelDownloader,
 		events:          deps.Events,
 		serviceName:     serviceName,
-		presetSources:   newPresetSourceCache(),
 	}
 }
 
