@@ -14,6 +14,7 @@ import (
 	"llamarig/platform/audit"
 
 	bindkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -99,24 +100,33 @@ const (
 )
 
 type LogsTab struct {
-	focus     logPane
-	scroll    [paneCount]int
-	follow    [paneCount]bool
-	search    [paneCount]string
-	searching bool
+	focus  logPane
+	scroll [paneCount]int
+	follow [paneCount]bool
+	input  [paneCount]textinput.Model
 }
 
-func NewLogsTab() LogsTab { return LogsTab{follow: [paneCount]bool{true, true}} }
+func NewLogsTab() LogsTab {
+	t := LogsTab{follow: [paneCount]bool{true, true}}
+	for i := range t.input {
+		t.input[i] = textinput.New()
+	}
+	return t
+}
 
-func (t *LogsTab) IsSearching() bool { return t.searching }
+func (t *LogsTab) IsSearching() bool { return t.input[t.focus].Focused() }
 
 func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return
 	}
-	if t.searching {
-		t.updateSearch(key)
+	if t.input[t.focus].Focused() {
+		if s := key.String(); s == "enter" || s == "esc" {
+			t.input[t.focus].Blur()
+		} else {
+			t.input[t.focus], _ = t.input[t.focus].Update(key)
+		}
 		return
 	}
 	switch {
@@ -125,9 +135,10 @@ func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 	case bindkey.Matches(key, keys.PreviousPanel):
 		t.focus = (t.focus + paneCount - 1) % paneCount
 	case key.String() == "/":
-		t.searching = true
+		t.input[t.focus].Focus()
 	case key.String() == "esc":
-		t.search[t.focus], t.follow[t.focus] = "", true
+		t.input[t.focus].SetValue("")
+		t.follow[t.focus] = true
 	case bindkey.Matches(key, keys.Up):
 		t.scroll[t.focus] = max(0, t.scroll[t.focus]-1)
 		t.follow[t.focus] = false
@@ -137,25 +148,11 @@ func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 	}
 }
 
-func (t *LogsTab) updateSearch(key tea.KeyPressMsg) {
-	switch {
-	case key.String() == "enter", key.String() == "esc":
-		t.searching = false
-	case key.String() == "backspace":
-		if query := t.search[t.focus]; query != "" {
-			runes := []rune(query)
-			t.search[t.focus] = string(runes[:len(runes)-1])
-		}
-	case key.Text != "":
-		t.search[t.focus] += key.Text
-	}
-}
-
 func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	const helpHeight = 3
 	paneHeight := max(3, (height-helpHeight)/2)
 
-	daemonLog, llamaLog := filterDaemonLog(snapshot.daemonLog, t.search[paneDaemon]), filterLlamaLog(snapshot.llamaLog, t.search[paneLlama])
+	daemonLog, llamaLog := filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value()), filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())
 	daemonCount, llamaCount := len(daemonLog), len(llamaLog)
 	daemonLog, llamaLog = visibleLogWindow(daemonLog, &t.scroll[paneDaemon], paneHeight-2, t.follow[paneDaemon]), visibleLogWindow(llamaLog, &t.scroll[paneLlama], paneHeight-2, t.follow[paneLlama])
 
@@ -178,9 +175,9 @@ func renderLogPane(title string, accent color.Color, width, height int, lines []
 
 func logsHelp(width int, t *LogsTab) string {
 	status := "Tab Switch pane   ↑/↓ Scroll   / Search   Esc Clear   1/2/3/4 Switch tab"
-	if t.searching {
-		status = "Search: " + t.search[t.focus] + "█  (Enter/Esc to finish)"
-	} else if query := t.search[t.focus]; query != "" {
+	if t.input[t.focus].Focused() {
+		status = "Search: " + t.input[t.focus].View() + "  (Enter/Esc to finish)"
+	} else if query := t.input[t.focus].Value(); query != "" {
 		status = "Search: " + query + "  (Esc to clear)"
 	}
 	return ui.PanelStyle(ui.Muted, false).Width(width).Render(ui.MutedStyle.Render(status))
