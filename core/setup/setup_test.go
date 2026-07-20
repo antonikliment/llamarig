@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"llamarig/config"
 )
 
@@ -159,47 +158,78 @@ func TestRenderConfigEscapesWindowsPaths(t *testing.T) {
 	}
 }
 
-func TestWizardModelNavigation(t *testing.T) {
-	m := newModel(Paths{Home: "/tmp/" + config.ProjectName, Config: "/tmp/" + config.ProjectName + "/config.yaml"})
-	next, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-	m = next.(*model)
-	if m.step != stepListen {
-		t.Fatalf("step = %v", m.step)
+func TestValidateListen(t *testing.T) {
+	if err := validateListen("127.0.0.1:7000"); err != nil {
+		t.Fatalf("valid listen addr rejected: %v", err)
 	}
-	m.input.SetValue("bad")
-	next, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-	m = next.(*model)
-	if m.step != stepListen || m.err == nil {
-		t.Fatalf("expected listen validation error, step=%v err=%v", m.step, m.err)
+	if err := validateListen("bad"); err == nil {
+		t.Fatal("expected error for listen addr without port")
 	}
 }
 
-func TestWizardModelLlamaAutostartQuestion(t *testing.T) {
+func TestValidatePort(t *testing.T) {
+	if err := validatePort("8080"); err != nil {
+		t.Fatalf("valid port rejected: %v", err)
+	}
+	for _, bad := range []string{"0", "70000", "abc", ""} {
+		if err := validatePort(bad); err == nil {
+			t.Fatalf("expected error for port %q", bad)
+		}
+	}
+}
+
+func TestStartupServices(t *testing.T) {
+	both := []string{config.StartupServiceControl, config.StartupServiceWeb}
+	cases := map[string][]string{
+		"":        both,
+		"both":    both,
+		"control": {config.StartupServiceControl},
+		"web":     {config.StartupServiceWeb},
+	}
+	for sel, want := range cases {
+		if got := startupServices(sel); !slicesEqual(got, want) {
+			t.Fatalf("startupServices(%q) = %v, want %v", sel, got, want)
+		}
+	}
+}
+
+func TestLlamaExecutableResolves(t *testing.T) {
 	llamaExe := filepath.Join(t.TempDir(), "llama-server")
 	if err := os.WriteFile(llamaExe, nil, 0o755); err != nil {
 		t.Fatalf("write fake llama-server: %v", err)
 	}
-	m := newModel(Paths{Home: "/tmp/" + config.ProjectName, Config: "/tmp/" + config.ProjectName + "/config.yaml"})
-	for _, value := range []string{"", "127.0.0.1:7000", config.ProjectTokenEnv, llamaExe, "/tmp/models", "", "127.0.0.1", "8080"} {
-		m.input.SetValue(value)
-		next, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-		m = next.(*model)
+	if !llamaExecutableResolves(llamaExe) {
+		t.Fatal("existing executable path should resolve")
 	}
-	if m.step != stepAutoStart {
-		t.Fatalf("step = %v, want autostart", m.step)
+	if llamaExecutableResolves(filepath.Join(t.TempDir(), "missing")) {
+		t.Fatal("missing executable path should not resolve")
 	}
-	m.input.SetValue("yes")
-	next, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-	m = next.(*model)
-	if !m.answers.AutoStart || m.step != stepStartupServices {
-		t.Fatalf("autostart=%v step=%v", m.answers.AutoStart, m.step)
+}
+
+func TestRemoteWithoutToken(t *testing.T) {
+	t.Setenv("LLAMARIG_UNSET_TOKEN", "")
+	if !remoteWithoutToken(Answers{ListenAddr: "0.0.0.0:7000", AuthTokenEnv: "LLAMARIG_UNSET_TOKEN"}) {
+		t.Fatal("remote bind with unset token env should require confirmation")
 	}
-	m.input.SetValue("both")
-	next, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-	m = next.(*model)
-	if m.step != stepReview {
-		t.Fatalf("step=%v, want review", m.step)
+	if remoteWithoutToken(Answers{ListenAddr: "127.0.0.1:7000", AuthTokenEnv: "LLAMARIG_UNSET_TOKEN"}) {
+		t.Fatal("loopback bind should not require confirmation")
 	}
+	t.Setenv("LLAMARIG_SET_TOKEN", "secret")
+	if remoteWithoutToken(Answers{ListenAddr: "0.0.0.0:7000", AuthTokenEnv: "LLAMARIG_SET_TOKEN"}) {
+		t.Fatal("remote bind with token env set should not require confirmation")
+	}
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func assertMode(t *testing.T, path string, want os.FileMode) {
