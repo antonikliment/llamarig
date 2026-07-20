@@ -11,6 +11,7 @@ import (
 	controlv1 "llamarig/core/rpc/gen/v1"
 
 	bindkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -30,14 +31,14 @@ type ServicesTab struct {
 	message         [servicePanelCount]string
 	err             [servicePanelCount]string
 	keys            KeyMap
-	scroll          int
+	vp              viewport.Model
 	stopping        [servicePanelCount]bool
 	frame           [servicePanelCount]int
 	runtimes        []string
 	presetAutostart map[string]bool
 }
 
-func NewServicesTab() ServicesTab { return ServicesTab{keys: DefaultKeyMap()} }
+func NewServicesTab() ServicesTab { return ServicesTab{keys: DefaultKeyMap(), vp: viewport.New()} }
 
 func (t *ServicesTab) Update(msg tea.Msg) tea.Cmd {
 	key, ok := msg.(tea.KeyPressMsg)
@@ -66,9 +67,9 @@ func (t *ServicesTab) Update(msg tea.Msg) tea.Cmd {
 func (t *ServicesTab) updateScroll(key tea.KeyPressMsg) {
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
-		t.scroll = max(0, t.scroll-1)
+		t.vp.ScrollUp(1)
 	case bindkey.Matches(key, t.keys.Down):
-		t.scroll++
+		t.vp.ScrollDown(1)
 	}
 }
 
@@ -148,8 +149,10 @@ func (t *ServicesTab) View(width, height int, snapshot dashboardSnapshot) string
 		renderRuntime(panelWidth, 10, snapshot.runtime, snapshot.warnings["runtime"], t.focus == servicePanelModels, target, len(t.runtimes), t.presetAutostart, t.message[servicePanelModels], t.err[servicePanelModels]),
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, ui.Flow(width, gap, top), servicesOverview(width, gap, panelWidth, t.keys, t.focus))
-	t.scroll = min(t.scroll, max(0, strings.Count(content, "\n")+1-height))
-	return ui.VerticalSlice(content, t.scroll, height)
+	t.vp.SetWidth(width)
+	t.vp.SetHeight(height)
+	t.vp.SetContent(content)
+	return t.vp.View()
 }
 
 // stoppingState resolves the display state/color for a service panel that

@@ -33,7 +33,7 @@ type Model struct {
 }
 
 func NewModel(ctx context.Context) Model {
-	return Model{services: NewServicesTab(), models: NewModelsTab(), logs: NewLogsTab(), keys: DefaultKeyMap(), backend: newDashboardBackend(ctx), snapshot: dashboardSnapshot{warnings: map[string]string{}}}
+	return Model{services: NewServicesTab(), models: NewModelsTab(), system: NewSystemTab(), logs: NewLogsTab(), keys: DefaultKeyMap(), backend: newDashboardBackend(ctx), snapshot: dashboardSnapshot{warnings: map[string]string{}}}
 }
 
 func (m *Model) Init() tea.Cmd { return tea.Batch(m.backend.autostart(), m.refresh(), tickDashboard()) }

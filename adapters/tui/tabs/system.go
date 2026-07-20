@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"llamarig/adapters/tui/ui"
 	"math"
-	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	controlv1 "llamarig/core/rpc/gen/v1"
@@ -16,23 +16,26 @@ import (
 var resourceStyle = lipgloss.NewStyle().Foreground(ui.Cyan)
 var warningStyle = lipgloss.NewStyle().Foreground(ui.Yellow)
 
-type SystemTab struct{ scroll int }
+type SystemTab struct{ vp viewport.Model }
+
+func NewSystemTab() SystemTab { return SystemTab{vp: viewport.New()} }
 
 func (t *SystemTab) Update(msg tea.Msg, keys KeyMap) {
 	if pressed, ok := msg.(tea.KeyPressMsg); ok {
 		if key.Matches(pressed, keys.Up) {
-			t.scroll = max(0, t.scroll-1)
+			t.vp.ScrollUp(1)
 		}
 		if key.Matches(pressed, keys.Down) {
-			t.scroll++
+			t.vp.ScrollDown(1)
 		}
 	}
 }
 
 func (t *SystemTab) View(width, height int, snapshot dashboardSnapshot) string {
-	content := renderSystem(width, snapshot.resources, snapshot.warnings["resources"])
-	t.scroll = min(t.scroll, max(0, strings.Count(content, "\n")+1-height))
-	return ui.VerticalSlice(content, t.scroll, height)
+	t.vp.SetWidth(width)
+	t.vp.SetHeight(height)
+	t.vp.SetContent(renderSystem(width, snapshot.resources, snapshot.warnings["resources"]))
+	return t.vp.View()
 }
 
 func renderSystem(width int, resources *controlv1.SignalsSnapshot, warning string) string {

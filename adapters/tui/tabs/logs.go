@@ -15,6 +15,7 @@ import (
 
 	bindkey "charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -101,7 +102,7 @@ const (
 
 type LogsTab struct {
 	focus  logPane
-	scroll [paneCount]int
+	vp     [paneCount]viewport.Model
 	follow [paneCount]bool
 	input  [paneCount]textinput.Model
 }
@@ -110,6 +111,7 @@ func NewLogsTab() LogsTab {
 	t := LogsTab{follow: [paneCount]bool{true, true}}
 	for i := range t.input {
 		t.input[i] = textinput.New()
+		t.vp[i] = viewport.New()
 	}
 	return t
 }
@@ -140,11 +142,11 @@ func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 		t.input[t.focus].SetValue("")
 		t.follow[t.focus] = true
 	case bindkey.Matches(key, keys.Up):
-		t.scroll[t.focus] = max(0, t.scroll[t.focus]-1)
-		t.follow[t.focus] = false
+		t.vp[t.focus].ScrollUp(1)
+		t.follow[t.focus] = t.vp[t.focus].AtBottom()
 	case bindkey.Matches(key, keys.Down):
-		t.scroll[t.focus]++
-		t.follow[t.focus] = false
+		t.vp[t.focus].ScrollDown(1)
+		t.follow[t.focus] = t.vp[t.focus].AtBottom()
 	}
 }
 
@@ -152,25 +154,28 @@ func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	const helpHeight = 3
 	paneHeight := max(3, (height-helpHeight)/2)
 
-	daemonLog, llamaLog := filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value()), filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())
-	daemonCount, llamaCount := len(daemonLog), len(llamaLog)
-	daemonLog, llamaLog = visibleLogWindow(daemonLog, &t.scroll[paneDaemon], paneHeight-2, t.follow[paneDaemon]), visibleLogWindow(llamaLog, &t.scroll[paneLlama], paneHeight-2, t.follow[paneLlama])
+	daemonLines := renderDaemonLog(filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value()))
+	llamaLines := renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value()))
 
-	daemonPanel := renderLogPane("Daemon — zap", ui.Green, width, paneHeight, renderDaemonLog(daemonLog), daemonCount, t.focus == paneDaemon)
-	llamaPanel := renderLogPane("Llama server", ui.Purple, width, paneHeight, renderLlamaLog(llamaLog), llamaCount, t.focus == paneLlama)
+	daemonPanel := t.renderLogPane(paneDaemon, "Daemon — zap", ui.Green, width, paneHeight, daemonLines)
+	llamaPanel := t.renderLogPane(paneLlama, "Llama server", ui.Purple, width, paneHeight, llamaLines)
 
 	body := lipgloss.JoinVertical(lipgloss.Left, daemonPanel, llamaPanel, logsHelp(width, t))
 	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
 
-func renderLogPane(title string, accent color.Color, width, height int, lines []string, count int, focused bool) string {
-	inner := max(1, height-2)
-	body := ui.VerticalSlice(strings.Join(lines, "\n"), 0, inner)
-	header := ui.StatusTitle(title, fmt.Sprintf("%d lines", count), accent, ui.Muted, width-4)
-	content := header + "\n" + body
+func (t *LogsTab) renderLogPane(pane logPane, title string, accent color.Color, width, height int, lines []string) string {
+	vp := &t.vp[pane]
+	vp.SetWidth(width - 4)
+	vp.SetHeight(max(1, height-3)) // panel border (2) + header line (1)
+	vp.SetContent(strings.Join(lines, "\n"))
+	if t.follow[pane] {
+		vp.GotoBottom()
+	}
+	header := ui.StatusTitle(title, fmt.Sprintf("%d lines", len(lines)), accent, ui.Muted, width-4)
 	// MaxHeight hard-clips the rendered block: wide lines may still wrap
 	// internally, but the panel's footprint never grows past height.
-	return ui.PanelStyle(accent, focused).Width(width).Height(height).MaxHeight(height).Render(content)
+	return ui.PanelStyle(accent, t.focus == pane).Width(width).Height(height).MaxHeight(height).Render(header + "\n" + vp.View())
 }
 
 func logsHelp(width int, t *LogsTab) string {
@@ -209,15 +214,6 @@ func filterDaemonLog(entries []zapEntry, query string) []zapEntry {
 		}
 	}
 	return out
-}
-
-func visibleLogWindow[T any](entries []T, scroll *int, height int, follow bool) []T {
-	if follow {
-		*scroll = max(0, len(entries)-height)
-	} else {
-		*scroll = min(*scroll, max(0, len(entries)-height))
-	}
-	return entries[*scroll:min(len(entries), *scroll+height)]
 }
 
 func renderDaemonLog(entries []zapEntry) []string {
