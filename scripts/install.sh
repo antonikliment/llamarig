@@ -131,6 +131,13 @@ install_binary() {
 	install -m 755 "$workdir/$name/llamarig" "$install_dir/llamarig"
 	echo "installed $("$install_dir/llamarig" version) to $install_dir/llamarig" >&2
 
+	if command -v lr >/dev/null 2>&1 || [ -e "$install_dir/lr" ] || [ -L "$install_dir/lr" ]; then
+		echo "kept existing lr command" >&2
+	else
+		ln -s llamarig "$install_dir/lr"
+		echo "installed lr alias to $install_dir/lr" >&2
+	fi
+
 	case ":$PATH:" in
 	*":$install_dir:"*) ;;
 	*) echo "note: $install_dir is not on your PATH" >&2 ;;
