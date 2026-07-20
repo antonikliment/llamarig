@@ -54,12 +54,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 		return cmd
 	case spinner.TickMsg:
-		if !m.services.anyStopping() {
-			return nil
-		}
-		var cmd tea.Cmd
-		m.services.spin, cmd = m.services.spin.Update(msg)
-		return cmd
+		return m.advanceSpinner(msg)
 	case actionResultMsg:
 		m.services.setResult(msg)
 		return m.refresh()
@@ -95,6 +90,15 @@ func (m *Model) updateModelMessage(msg tea.Msg) tea.Cmd {
 		return m.updateAutostart(msg)
 	}
 	return nil
+}
+
+func (m *Model) advanceSpinner(msg tea.Msg) tea.Cmd {
+	if !m.services.anyStopping() {
+		return nil
+	}
+	var cmd tea.Cmd
+	m.services.spin, cmd = m.services.spin.Update(msg)
+	return cmd
 }
 
 func (m *Model) updateAutostart(msg autostartResultMsg) tea.Cmd {
