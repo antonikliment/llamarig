@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"llamarig/adapters/tui"
@@ -13,6 +14,10 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// setupEnsure runs the first-run setup wizard when no config exists. It is a
+// package-level indirection so tests can observe the bare/TUI path invoking it.
+var setupEnsure = setup.Ensure
 
 var setupCommand = &cobra.Command{
 	Use: "setup",
@@ -149,6 +154,15 @@ func runTUI(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	// Run the first-run setup wizard on the real TTY before bubbletea takes
+	// over stdin/stdout. Ensure no-ops when a config already exists, so this is
+	// safe and idempotent. A cancelled wizard exits cleanly.
+	if err := setupEnsure(ctx); err != nil {
+		if errors.Is(err, setup.ErrCancelled) {
+			return nil
+		}
+		return err
 	}
 	return tui.Run(ctx, cmd.InOrStdin(), cmd.OutOrStdout())
 }
