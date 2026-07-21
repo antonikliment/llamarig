@@ -80,6 +80,15 @@ func newControlRPCListener() (net.Listener, string, error) {
 // DialControl builds a ControlService client over the local control Unix
 // socket. Callers (CLI, TUI) only differ in the request timeout.
 func DialControl(socketPath string, timeout time.Duration) (controlv1connect.ControlServiceClient, error) {
+	transport, err := ControlTransport(socketPath)
+	if err != nil {
+		return nil, err
+	}
+	return controlv1connect.NewControlServiceClient(&http.Client{Timeout: timeout, Transport: transport}, "http://unix"), nil
+}
+
+// ControlTransport connects HTTP clients to the local control Unix socket.
+func ControlTransport(socketPath string) (*http.Transport, error) {
 	if socketPath == "" {
 		path, err := platformconfig.ControlSocketPath()
 		if err != nil {
@@ -87,14 +96,12 @@ func DialControl(socketPath string, timeout time.Duration) (controlv1connect.Con
 		}
 		socketPath = path
 	}
-	client := &http.Client{Timeout: timeout}
-	client.Transport = &http.Transport{
+	return &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{Timeout: 2 * time.Second}).DialContext(ctx, "unix", socketPath)
 		},
 		DisableKeepAlives: true,
-	}
-	return controlv1connect.NewControlServiceClient(client, "http://unix"), nil
+	}, nil
 }
 
 func removeStaleSocket(path string) error {

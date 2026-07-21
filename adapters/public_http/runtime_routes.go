@@ -15,7 +15,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	health, err := s.internalControl.Health(r.Context(), &controlv1.HealthRequest{})
-	writeRPCResponse(w, health, err, "internal health rpc returned no response")
+	writeRPCMappedResponse(w, health, err, "internal health rpc returned no response", identity)
 }
 
 // rpcGet adapts a request-less control RPC into a GET handler.
@@ -31,20 +31,3 @@ func rpcGet[Req, Resp any](s *Server, call func(controlv1connect.ControlServiceC
 }
 
 func identity[T any](response *T) any { return response }
-
-// runtimeAction adapts a preset-targeted runtime command RPC into a handler
-// that reads the target preset from the query string.
-func runtimeAction(s *Server, call func(controlv1connect.ControlServiceClient, context.Context, *controlv1.RuntimeTargetRequest) (*controlv1.CommandResponse, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if s.internalControl == nil {
-			http.Error(w, "internal control service not available", http.StatusServiceUnavailable)
-			return
-		}
-		result, err := call(s.internalControl, r.Context(), &controlv1.RuntimeTargetRequest{Target: r.URL.Query().Get("preset")})
-		writeCommandRPCResponse(w, result, err)
-	}
-}
-
-func llamaParamsPayload(params *controlv1.GetLlamaServerParamsResponse) any {
-	return map[string]any{"ok": params.GetOk(), "params": params.GetParams(), "source": params.GetSource(), "warning": params.GetWarning()}
-}

@@ -2,9 +2,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,45 +11,95 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	controlv1 "llamarig/core/rpc/gen/v1"
+	"llamarig/core/rpc/gen/v1/controlv1connect"
 )
 
-// TestGatewayRESTFlow drives the public_http REST gateway end-to-end against a
+// TestGatewayRPCFlow drives the public Connect RPC gateway end-to-end against a
 // real in-process control service: preset CRUD, a stub runtime lifecycle, and
 // the read-only telemetry endpoints.
-func TestGatewayRESTFlow(t *testing.T) {
-	gw := startGateway(t)
+func TestGatewayRPCFlow(t *testing.T) {
+	server := httptest.NewServer(startGateway(t))
+	t.Cleanup(server.Close)
+	client := controlv1connect.NewControlServiceClient(server.Client(), server.URL)
+	ctx := context.Background()
 	name := "gw-preset"
 	modelPath := filepath.Join(t.TempDir(), name+".gguf")
 	if err := os.WriteFile(modelPath, []byte("gguf"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	gatewayOK(t, gw, http.MethodGet, "/health", "")
-	gatewayOK(t, gw, http.MethodGet, "/api/info", "")
-	gatewayOK(t, gw, http.MethodGet, "/api/signals", "")
-	gatewayOK(t, gw, http.MethodGet, "/api/events", "")
-	gatewayOK(t, gw, http.MethodGet, "/api/models/local", "")
+	assertGatewayReads(t, client)
 
-	created := gatewayJSON(t, gw, http.MethodPost, "/api/presets", fmt.Sprintf(`{"name":%q,"entries":[{"key":"model","value":%q}]}`, name, modelPath))
-	if created["ok"] != true {
+	created, err := client.PutPreset(ctx, &controlv1.PutPresetRequest{
+		Preset:     &controlv1.ModelPreset{Name: name, Entries: []*controlv1.PresetEntry{{Key: "model", Value: modelPath}}},
+		CreateOnly: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.GetOk() {
 		t.Fatalf("create preset: %#v", created)
 	}
 
-	list := gatewayJSON(t, gw, http.MethodGet, "/api/presets", "")
-	if !gatewayListHasPreset(list, name) {
+	list, err := client.ListPresets(ctx, &controlv1.ListPresetsRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rpcListHasPreset(list, name) {
 		t.Fatalf("created preset missing from list: %#v", list)
 	}
-	gatewayOK(t, gw, http.MethodGet, "/api/presets/"+name, "")
+	if _, err := client.GetPreset(ctx, &controlv1.GetPresetRequest{Name: name}); err != nil {
+		t.Fatal(err)
+	}
 
-	gatewayOK(t, gw, http.MethodPost, "/api/runtime/start?preset="+name, "")
-	gatewayWaitRunning(t, gw, name)
-	for _, target := range []string{"/api/runtime/resources", "/api/config.yaml"} {
-		if rec := gatewayDo(t, gw, http.MethodGet, target, ""); rec.Code != http.StatusNotFound {
-			t.Fatalf("%s status=%d body=%s", target, rec.Code, rec.Body.String())
+	if _, err := client.StartRuntime(ctx, &controlv1.RuntimeTargetRequest{Target: name}); err != nil {
+		t.Fatal(err)
+	}
+	rpcWaitRunning(t, client, name)
+	assertRemovedRoutes(t, server)
+	if _, err := client.StopRuntime(ctx, &controlv1.RuntimeTargetRequest{Target: name}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.DeletePreset(ctx, &controlv1.DeletePresetRequest{Name: name}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertGatewayReads(t *testing.T, client controlv1connect.ControlServiceClient) {
+	t.Helper()
+	ctx := context.Background()
+	checks := []error{}
+	_, err := client.Health(ctx, &controlv1.HealthRequest{})
+	checks = append(checks, err)
+	_, err = client.GetInfo(ctx, &controlv1.GetInfoRequest{})
+	checks = append(checks, err)
+	_, err = client.GetSignals(ctx, &controlv1.GetSignalsRequest{})
+	checks = append(checks, err)
+	_, err = client.ListEvents(ctx, &controlv1.ListEventsRequest{})
+	checks = append(checks, err)
+	_, err = client.ListLocalModels(ctx, &controlv1.ListLocalModelsRequest{})
+	checks = append(checks, err)
+	for _, err := range checks {
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
-	gatewayOK(t, gw, http.MethodPost, "/api/runtime/stop?preset="+name, "")
-	gatewayOK(t, gw, http.MethodDelete, "/api/presets/"+name, "")
+}
+
+func assertRemovedRoutes(t *testing.T, server *httptest.Server) {
+	t.Helper()
+	for _, target := range []string{"/api/runtime/resources", "/api/config.yaml"} {
+		response, err := server.Client().Get(server.URL + target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("%s status=%d", target, response.StatusCode)
+		}
+	}
 }
 
 // TestGatewayMCPSession drives the MCP adapter over the gateway's /mcp HTTP
@@ -114,58 +161,25 @@ func requireMCPTool(t *testing.T, session *mcp.ClientSession, name string, args 
 	return result
 }
 
-func gatewayDo(t *testing.T, h http.Handler, method, target, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	var reader io.Reader
-	if body != "" {
-		reader = strings.NewReader(body)
-	}
-	req := httptest.NewRequest(method, target, reader)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
-}
-
-func gatewayOK(t *testing.T, h http.Handler, method, target, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	rec := gatewayDo(t, h, method, target, body)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("%s %s -> %d: %s", method, target, rec.Code, rec.Body.String())
-	}
-	return rec
-}
-
-func gatewayJSON(t *testing.T, h http.Handler, method, target, body string) map[string]any {
-	t.Helper()
-	rec := gatewayOK(t, h, method, target, body)
-	out := map[string]any{}
-	if rec.Body.Len() > 0 {
-		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
-			t.Fatalf("%s %s decode: %v body=%s", method, target, err, rec.Body.String())
-		}
-	}
-	return out
-}
-
-func gatewayListHasPreset(list map[string]any, name string) bool {
-	presets, _ := list["presets"].([]any)
-	for _, raw := range presets {
-		if preset, ok := raw.(map[string]any); ok && preset["name"] == name {
+func rpcListHasPreset(list *controlv1.ListPresetsResponse, name string) bool {
+	for _, preset := range list.GetPresets() {
+		if preset.GetName() == name {
 			return true
 		}
 	}
 	return false
 }
 
-func gatewayWaitRunning(t *testing.T, h http.Handler, name string) {
+func rpcWaitRunning(t *testing.T, client controlv1connect.ControlServiceClient, name string) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		status := gatewayJSON(t, h, http.MethodGet, "/api/runtime/status", "")
-		presets, _ := status["presets"].([]any)
-		for _, raw := range presets {
-			preset, ok := raw.(map[string]any)
-			if ok && preset["name"] == name && preset["state"] == "running" && preset["ready"] == true {
+		status, err := client.GetRuntimeStatus(context.Background(), &controlv1.GetRuntimeStatusRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, preset := range status.GetStatus().GetPresets() {
+			if preset.GetName() == name && preset.GetState() == "running" && preset.GetReady() {
 				return
 			}
 		}
