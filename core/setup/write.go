@@ -44,6 +44,9 @@ func WriteFiles(paths Paths, answers Answers, force bool) error {
 	if err := ensureWritableSetup(paths, force); err != nil {
 		return err
 	}
+	if err := ensureModelsDir(answers.LlamaModelsDir); err != nil {
+		return err
+	}
 	return writeSetupFiles(paths, cfg, preset, force)
 }
 
@@ -58,6 +61,16 @@ func ensureWritableSetup(paths Paths, force bool) error {
 	}
 	if err := os.Chmod(paths.Home, 0o700); err != nil {
 		return fmt.Errorf("chmod %s home: %w", config.ProjectName, err)
+	}
+	return nil
+}
+
+func ensureModelsDir(dir string) error {
+	if dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create models dir: %w", err)
 	}
 	return nil
 }

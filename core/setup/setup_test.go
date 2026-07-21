@@ -52,6 +52,14 @@ func TestEnsureWritesFiles(t *testing.T) {
 	assertMode(t, dir, 0o700)
 	assertMode(t, filepath.Join(dir, "config.yaml"), 0o600)
 	assertMode(t, filepath.Join(dir, "models.ini"), 0o600)
+	modelsDir := filepath.Join(dir, "models")
+	info, err := os.Stat(modelsDir)
+	if err != nil {
+		t.Fatalf("models dir not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected %s to be a directory", modelsDir)
+	}
 }
 
 func TestEnsureSkipsExistingConfigWithoutForce(t *testing.T) {
