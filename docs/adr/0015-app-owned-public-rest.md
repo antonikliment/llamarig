@@ -21,5 +21,7 @@ The unused `/api/runtime/resources` and `/api/config.yaml*` routes are removed. 
 - The public gateway exposes only routes needed by its bundled app and gateway-owned features.
 - Raw HTTP clients using the removed routes must migrate to the CLI, MCP, or an internal socket client.
 - The bundled app and its REST facade continue to ship together, so they need no compatibility window between versions.
-- Replacing the remaining facade with proxied Connect RPC is still a separate migration and is not required for this cleanup.
+- The bundled web UI now uses the existing ControlService through a public
+  Connect RPC proxy. Only gateway-owned health/info, logs, and MCP HTTP routes
+  remain outside that schema.
 - This supersedes the public REST compatibility consequence in ADR 0005.

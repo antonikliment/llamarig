@@ -15,7 +15,7 @@ export function createLlamaRigClient() {
   let pollTimer: number | null = null;
   let refreshTimer: number | null = null;
   let presetCheckingTimer: number | null = null;
-  let catalogEvents: EventSource | null = null;
+  let catalogEvents: AbortController | null = null;
 
   const client = {
     state,
@@ -525,22 +525,30 @@ export function createLlamaRigClient() {
 
   function connectCatalogEvents() {
     if (catalogEvents) return;
-    catalogEvents = new EventSource(api.modelCatalogEventsUrl());
-    catalogEvents.addEventListener('catalog_refresh', (event) => {
-      const data = JSON.parse((event as MessageEvent).data || '{}') as { ok?: boolean; error?: string };
-      if (!data.ok) {
-        if (data.error) showError(new Error(data.error));
-        return;
+    const controller = new AbortController();
+    catalogEvents = controller;
+    void watchCatalogEvents(controller);
+  }
+
+  async function watchCatalogEvents(controller: AbortController) {
+    try {
+      for await (const event of api.watchModelCatalog(controller.signal)) {
+        if (event.type !== 'catalog_refresh') continue;
+        if (!event.ok) {
+          if (event.error) showError(new Error(event.error));
+          continue;
+        }
+        await loadModelCatalog();
       }
-      loadModelCatalog().catch(showError);
-    });
-    catalogEvents.onerror = () => {
-      closeCatalogEvents();
-    };
+    } catch (error) {
+      if (!controller.signal.aborted) showError(error);
+    } finally {
+      if (catalogEvents === controller) catalogEvents = null;
+    }
   }
 
   function closeCatalogEvents() {
-    catalogEvents?.close();
+    catalogEvents?.abort();
     catalogEvents = null;
   }
 

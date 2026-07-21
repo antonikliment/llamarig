@@ -4,11 +4,12 @@
   "type": "module",
   "packageManager": "pnpm@10.22.0",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "pnpm run generate:rpc && vite",
+    "generate:rpc": "cd .. && go tool buf generate --template buf.web.gen.yaml",
+    "build": "pnpm run generate:rpc && vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run",
+    "check": "pnpm run generate:rpc && svelte-check --tsconfig ./tsconfig.json",
+    "test": "pnpm run generate:rpc && vitest run",
     "test:watch": "vitest",
     "check:architecture": "node scripts/check-panel-architecture.mjs",
     "screenshots": "node scripts/capture.mjs",
@@ -16,10 +17,14 @@
     "verify": "pnpm run verify:web && cd .. && go test ./..."
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.13.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-web": "^2.1.2",
     "layerchart": "^2.0.1",
     "svelte": "^5.56.5"
   },
   "devDependencies": {
+    "@bufbuild/protoc-gen-es": "^2.13.0",
     "@fontsource-variable/inter": "^5.2.8",
     "@internationalized/date": "^3.12.2",
     "@lucide/svelte": "^1.24.0",

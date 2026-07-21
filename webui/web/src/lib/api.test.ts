@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { apiUrl, createApiClient } from './api';
 
+const connectResponse = (body = '{}', status = 200) => new Response(body, {
+  status,
+  headers: { 'Content-Type': 'application/json' }
+});
+
 describe('apiUrl', () => {
   it('uses same-origin paths for empty base', () => {
     expect(apiUrl('/api/info', '')).toBe('/api/info');
@@ -16,7 +21,7 @@ describe('createApiClient', () => {
     let captured: RequestInit | undefined;
     const fetcher: typeof fetch = async (_input, init) => {
       captured = init;
-      return new Response('{}');
+      return connectResponse();
     };
     const api = createApiClient(() => ({ apiBase: '', token: ' secret ' }), fetcher as unknown as typeof fetch);
 
@@ -26,37 +31,40 @@ describe('createApiClient', () => {
     expect(headers.get('Authorization')).toBe('Bearer secret');
   });
 
-  it('includes server error kind and message', async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ error: { kind: 'bad', message: 'nope' } }), { status: 400 }));
+  it('includes Connect error code and message', async () => {
+    const fetcher = vi.fn(async () => connectResponse(JSON.stringify({ code: 'invalid_argument', message: 'nope' }), 400));
     const api = createApiClient(() => ({ apiBase: '', token: '' }), fetcher as unknown as typeof fetch);
 
-    await expect(api.getInfo()).rejects.toThrow('bad: nope');
+    await expect(api.getInfo()).rejects.toThrow('[invalid_argument] nope');
   });
 
-  it('builds catalog query URLs', async () => {
+  it('sends typed catalog query fields', async () => {
     let captured = '';
-    const fetcher: typeof fetch = async (input) => {
+    let body = '';
+    const fetcher: typeof fetch = async (input, init) => {
       captured = String(input);
-      return new Response('{}');
+      body = await new Request(new URL(captured, 'http://localhost'), init).text();
+      return connectResponse();
     };
     const api = createApiClient(() => ({ apiBase: '', token: '' }), fetcher as unknown as typeof fetch);
 
     await api.listModelCatalog({ limit: 25, sort: 'trending', search: 'qwen coder', min_fit: 'marginal' });
 
-    expect(captured).toBe('/api/models/catalog?limit=25&sort=trending&search=qwen+coder&min_fit=marginal');
+    expect(captured).toBe('/llamarig.control.v1.ControlService/ListModelCatalog');
+    expect(JSON.parse(body)).toEqual({ limit: 25, sort: 'trending', search: 'qwen coder', minFit: 'marginal' });
   });
 
   it('calls signals endpoint', async () => {
     let captured = '';
     const fetcher: typeof fetch = async (input) => {
       captured = String(input);
-      return new Response('{}');
+      return connectResponse();
     };
     const api = createApiClient(() => ({ apiBase: '', token: '' }), fetcher as unknown as typeof fetch);
 
     await api.getSignals();
 
-    expect(captured).toBe('/api/signals');
+    expect(captured).toBe('/llamarig.control.v1.ControlService/GetSignals');
   });
 
   it('builds bounded log and archive requests', async () => {

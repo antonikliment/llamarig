@@ -1,0 +1,8 @@
+version: v2
+
+plugins:
+  - local: webui/node_modules/.bin/protoc-gen-es
+    out: webui/web/src/lib/gen
+    opt:
+      - target=ts
+      - import_extension=none

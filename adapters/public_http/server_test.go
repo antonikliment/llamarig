@@ -29,11 +29,15 @@ func (gatewayControl) SetStartupServices(_ context.Context, request *controlv1.S
 	return &controlv1.MutationResponse{Ok: len(request.GetServices()) > 0}, nil
 }
 
+func (gatewayControl) WatchModelCatalog(_ context.Context, _ *controlv1.WatchModelCatalogRequest, stream *connect.ServerStream[controlv1.ModelCatalogEvent]) error {
+	return stream.Send(&controlv1.ModelCatalogEvent{Type: "catalog_refresh", Ok: true})
+}
+
 func TestControlRPCProxy(t *testing.T) {
 	server := newGatewayTestServer(t, gatewayControl{}, Dependencies{})
 	public := httptest.NewServer(server.Handler())
 	t.Cleanup(public.Close)
-	client := controlv1connect.NewControlServiceClient(public.Client(), public.URL)
+	client := controlv1connect.NewControlServiceClient(public.Client(), public.URL, connect.WithProtoJSON())
 
 	response, err := client.Health(context.Background(), &controlv1.HealthRequest{})
 	if err != nil {
@@ -41,6 +45,13 @@ func TestControlRPCProxy(t *testing.T) {
 	}
 	if !response.GetOk() || response.GetService() != "socket-rpc" {
 		t.Fatalf("response = %#v", response)
+	}
+	stream, err := client.WatchModelCatalog(context.Background(), &controlv1.WatchModelCatalogRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stream.Receive() || stream.Msg().GetType() != "catalog_refresh" {
+		t.Fatalf("stream error = %v message = %#v", stream.Err(), stream.Msg())
 	}
 }
 
