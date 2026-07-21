@@ -29,14 +29,16 @@ type presetStartRequestMsg struct{ name string }
 type presetStartResultMsg struct{ err error }
 
 func NewModelsTab() ModelsTab {
+	styles := table.DefaultStyles()
+	styles.Selected = ui.SelectedRowStyle // teal highlight instead of the bubbles default pink
 	return ModelsTab{
 		keys: DefaultKeyMap(),
 		presetTable: table.New(table.WithColumns([]table.Column{
 			{Title: "Preset", Width: 16}, {Title: "Model", Width: 40}, {Title: "State", Width: 12},
-		})),
+		}), table.WithStyles(styles)),
 		modelTable: table.New(table.WithColumns([]table.Column{
 			{Title: "Local model", Width: 40}, {Title: "Size", Width: 10}, {Title: "Use", Width: 20},
-		})),
+		}), table.WithStyles(styles)),
 	}
 }
 
