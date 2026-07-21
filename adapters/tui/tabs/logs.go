@@ -168,41 +168,46 @@ func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
 		paneLlama:  renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())),
 	}
 
-	meta := logPaneMeta[t.focus]
-	active := t.renderLogPane(t.focus, meta.title, meta.accent, width, paneHeight, lines[t.focus])
+	active := t.renderLogPane(t.focus, logPaneMeta[t.focus].accent, width, paneHeight, lines[t.focus])
 
 	body := lipgloss.JoinVertical(lipgloss.Left, t.tabStrip(lines), active, logsHelp(width, t))
 	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
 
-// tabStrip renders both logs as labelled tabs (with line counts) so it is clear
-// there are two, highlighting the active one; the inactive log is minimized to
-// just its tab label.
-func (t *LogsTab) tabStrip(lines [paneCount][]string) string {
-	labels := make([]string, 0, paneCount)
-	for pane := logPane(0); pane < paneCount; pane++ {
-		text := fmt.Sprintf(" %s (%d) ", logPaneMeta[pane].title, len(lines[pane]))
-		style := ui.InactiveTabStyle
-		if t.focus == pane {
-			style = ui.ActiveTabStyle
-		}
-		labels = append(labels, style.Render(text))
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, labels[paneDaemon], "  ", labels[paneLlama])
+var inactiveLogTabStyle = lipgloss.NewStyle().Foreground(ui.Muted).Padding(0, 1)
+
+func activeLogTabStyle(accent color.Color) lipgloss.Style {
+	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
 }
 
-func (t *LogsTab) renderLogPane(pane logPane, title string, accent color.Color, width, height int, lines []string) string {
+// tabStrip renders both logs as labelled tabs (with line counts) so it is clear
+// there are two, highlighting the active one as a filled chip; the inactive log
+// is minimized to just its tab label.
+func (t *LogsTab) tabStrip(lines [paneCount][]string) string {
+	chips := make([]string, 0, paneCount)
+	for pane := logPane(0); pane < paneCount; pane++ {
+		text := fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
+		if t.focus == pane {
+			chips = append(chips, activeLogTabStyle(logPaneMeta[pane].accent).Render(text))
+		} else {
+			chips = append(chips, inactiveLogTabStyle.Render(text))
+		}
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, chips[paneDaemon], " ", chips[paneLlama])
+}
+
+func (t *LogsTab) renderLogPane(pane logPane, accent color.Color, width, height int, lines []string) string {
 	vp := &t.vp[pane]
 	vp.SetWidth(width - 4)
-	vp.SetHeight(max(1, height-3)) // panel border (2) + header line (1)
+	vp.SetHeight(max(1, height-2)) // panel border (2)
 	vp.SetContent(strings.Join(lines, "\n"))
 	if t.follow[pane] {
 		vp.GotoBottom()
 	}
-	header := ui.StatusTitle(title, fmt.Sprintf("%d lines", len(lines)), accent, ui.Muted, width-4)
+	// Single border (the tab chip already carries the title + line count).
 	// MaxHeight hard-clips the rendered block: wide lines may still wrap
 	// internally, but the panel's footprint never grows past height.
-	return ui.PanelStyle(accent, t.focus == pane).Width(width).Height(height).MaxHeight(height).Render(header + "\n" + vp.View())
+	return ui.PanelStyle(accent, false).Width(width).Height(height).MaxHeight(height).Render(vp.View())
 }
 
 var (
