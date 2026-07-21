@@ -11,6 +11,8 @@ import (
 	controlv1 "llamarig/core/rpc/gen/v1"
 
 	bindkey "charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -30,14 +32,16 @@ type ServicesTab struct {
 	message         [servicePanelCount]string
 	err             [servicePanelCount]string
 	keys            KeyMap
-	scroll          int
+	vp              viewport.Model
+	spin            spinner.Model
 	stopping        [servicePanelCount]bool
-	frame           [servicePanelCount]int
 	runtimes        []string
 	presetAutostart map[string]bool
 }
 
-func NewServicesTab() ServicesTab { return ServicesTab{keys: DefaultKeyMap()} }
+func NewServicesTab() ServicesTab {
+	return ServicesTab{keys: DefaultKeyMap(), vp: viewport.New(), spin: spinner.New(spinner.WithSpinner(spinner.Ellipsis))}
+}
 
 func (t *ServicesTab) Update(msg tea.Msg) tea.Cmd {
 	key, ok := msg.(tea.KeyPressMsg)
@@ -66,9 +70,9 @@ func (t *ServicesTab) Update(msg tea.Msg) tea.Cmd {
 func (t *ServicesTab) updateScroll(key tea.KeyPressMsg) {
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
-		t.scroll = max(0, t.scroll-1)
+		t.vp.ScrollUp(1)
 	case bindkey.Matches(key, t.keys.Down):
-		t.scroll++
+		t.vp.ScrollDown(1)
 	}
 }
 
@@ -95,7 +99,7 @@ func (t *ServicesTab) action() tea.Cmd {
 		request.name = t.runtimes[request.index]
 	}
 	if request.target != actionRuntime && request.index == 1 {
-		t.stopping[t.focus], t.frame[t.focus] = true, 0
+		t.stopping[t.focus] = true
 	}
 	t.message[t.focus], t.err[t.focus] = "", ""
 	return func() tea.Msg { return request }
@@ -143,21 +147,23 @@ func (t *ServicesTab) View(width, height int, snapshot dashboardSnapshot) string
 	}
 	panelWidth := servicePanelWidth(width, gap)
 	top := []string{
-		renderDaemon(panelWidth, 10, snapshot, t.selected[servicePanelDaemon], t.focus == servicePanelDaemon, t.stopping[servicePanelDaemon], t.frame[servicePanelDaemon], t.message[servicePanelDaemon], t.err[servicePanelDaemon]),
-		renderHTTP(panelWidth, 10, snapshot, t.selected[servicePanelHTTP], t.focus == servicePanelHTTP, t.stopping[servicePanelHTTP], t.frame[servicePanelHTTP], t.message[servicePanelHTTP], t.err[servicePanelHTTP]),
+		renderDaemon(panelWidth, 10, snapshot, t.selected[servicePanelDaemon], t.focus == servicePanelDaemon, t.stopping[servicePanelDaemon], t.spin.View(), t.message[servicePanelDaemon], t.err[servicePanelDaemon]),
+		renderHTTP(panelWidth, 10, snapshot, t.selected[servicePanelHTTP], t.focus == servicePanelHTTP, t.stopping[servicePanelHTTP], t.spin.View(), t.message[servicePanelHTTP], t.err[servicePanelHTTP]),
 		renderRuntime(panelWidth, 10, snapshot.runtime, snapshot.warnings["runtime"], t.focus == servicePanelModels, target, len(t.runtimes), t.presetAutostart, t.message[servicePanelModels], t.err[servicePanelModels]),
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, ui.Flow(width, gap, top), servicesOverview(width, gap, panelWidth, t.keys, t.focus))
-	t.scroll = min(t.scroll, max(0, strings.Count(content, "\n")+1-height))
-	return ui.VerticalSlice(content, t.scroll, height)
+	t.vp.SetWidth(width)
+	t.vp.SetHeight(height)
+	t.vp.SetContent(content)
+	return t.vp.View()
 }
 
 // stoppingState resolves the display state/color for a service panel that
-// can be running, stopped, or mid-shutdown (animated by frame).
-func stoppingState(stopping, running bool, frame int) (string, color.Color) {
+// can be running, stopped, or mid-shutdown (animated by the spinner view).
+func stoppingState(stopping, running bool, spin string) (string, color.Color) {
 	switch {
 	case stopping:
-		return "Shutting down" + strings.Repeat(".", frame%4), ui.Yellow
+		return "Shutting down" + spin, ui.Yellow
 	case running:
 		return "Running", ui.Green
 	default:
@@ -165,9 +171,9 @@ func stoppingState(stopping, running bool, frame int) (string, color.Color) {
 	}
 }
 
-func renderDaemon(width, height int, snapshot dashboardSnapshot, selected int, focused, stopping bool, frame int, message, actionErr string) string {
+func renderDaemon(width, height int, snapshot dashboardSnapshot, selected int, focused, stopping bool, spin string, message, actionErr string) string {
 	status := snapshot.daemon
-	state, stateColor := stoppingState(stopping, status.Running, frame)
+	state, stateColor := stoppingState(stopping, status.Running, spin)
 	pid, uptime := "-", "-"
 	if status.Running {
 		pid, uptime = fmt.Sprint(status.PID), status.Uptime.String()
@@ -180,19 +186,17 @@ func renderDaemon(width, height int, snapshot dashboardSnapshot, selected int, f
 }
 
 func (t *ServicesTab) controlLocked() bool { return t.stopping[t.focus] }
-func (t *ServicesTab) animateShutdown() bool {
-	active := false
+func (t *ServicesTab) anyStopping() bool {
 	for panel := range t.stopping {
 		if t.stopping[panel] {
-			t.frame[panel]++
-			active = true
+			return true
 		}
 	}
-	return active
+	return false
 }
 
-func renderHTTP(width, height int, snapshot dashboardSnapshot, selected int, focused, stopping bool, frame int, message, actionErr string) string {
-	state, stateColor := stoppingState(stopping, snapshot.gateway.Running, frame)
+func renderHTTP(width, height int, snapshot dashboardSnapshot, selected int, focused, stopping bool, spin string, message, actionErr string) string {
+	state, stateColor := stoppingState(stopping, snapshot.gateway.Running, spin)
 	address := snapshot.config.ListenAddr
 	if address == "" {
 		address = "-"
@@ -264,14 +268,14 @@ func runtimePresetLine(preset *controlv1.RuntimePreset, autostart bool) string {
 }
 
 func servicesOverview(width, gap, panelWidth int, keys KeyMap, focus servicePanel) string {
-	showAutostart := focus == servicePanelModels
+	_ = focus
 	if width < 96 {
-		return ui.Flow(width, gap, []string{ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(llamaRigContent()), ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(quickHelpContent(keys, showAutostart))})
+		return ui.Flow(width, gap, []string{ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(llamaRigContent()), ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(quickHelpContent(keys))})
 	}
 	inner, column := width-4, (width-5)/2
 	columns := []string{
 		lipgloss.NewStyle().Width(column).Height(6).Render(llamaRigContent()),
-		lipgloss.NewStyle().Width(inner - column - 1).Height(6).PaddingLeft(1).Render(quickHelpContent(keys, showAutostart)),
+		lipgloss.NewStyle().Width(inner - column - 1).Height(6).PaddingLeft(1).Render(quickHelpContent(keys)),
 	}
 	separator := ui.MutedStyle.Render(strings.Repeat("│\n", 5) + "│")
 	return ui.PanelStyle(ui.Muted, false).Width(width).Render(lipgloss.JoinHorizontal(lipgloss.Top, columns[0], separator, columns[1]))
@@ -280,13 +284,12 @@ func servicesOverview(width, gap, panelWidth int, keys KeyMap, focus servicePane
 func llamaRigContent() string {
 	return lipgloss.JoinVertical(lipgloss.Left, ui.BrandStyle.Render(config.ProjectDisplayName), config.ProjectDisplayName+" is a local AI config server.", "It exposes running and configuring llama.cpp instances,", "with unified HTTP and MCP interfaces.")
 }
-func quickHelpContent(keys KeyMap, showAutostart bool) string {
-	lines := quickHelpLines(keys)
-	autostartLine := lines[6]
-	if !showAutostart {
-		autostartLine = ui.MutedStyle.Render(autostartLine)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, ui.MutedStyle.Render("Quick Help"), fmt.Sprintf("%-22s %s", lines[0], lines[1]), fmt.Sprintf("%-22s %s", lines[2], lines[3]), fmt.Sprintf("%-22s %s", lines[4], lines[5]), autostartLine)
+func quickHelpContent(keys KeyMap) string {
+	return lipgloss.JoinVertical(lipgloss.Left, ui.MutedStyle.Render("Quick Help"),
+		helpModel.FullHelpView([][]bindkey.Binding{
+			{keys.NextPanel, keys.NextAction, keys.RunAction, keys.ToggleAutostart},
+			{keys.ServicesTab, keys.Refresh, keys.Quit},
+		}))
 }
 
 func servicePanelWidth(total, gap int) int {

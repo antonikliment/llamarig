@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -33,7 +34,7 @@ type Model struct {
 }
 
 func NewModel(ctx context.Context) Model {
-	return Model{services: NewServicesTab(), models: NewModelsTab(), logs: NewLogsTab(), keys: DefaultKeyMap(), backend: newDashboardBackend(ctx), snapshot: dashboardSnapshot{warnings: map[string]string{}}}
+	return Model{services: NewServicesTab(), models: NewModelsTab(), system: NewSystemTab(), logs: NewLogsTab(), keys: DefaultKeyMap(), backend: newDashboardBackend(ctx), snapshot: dashboardSnapshot{warnings: map[string]string{}}}
 }
 
 func (m *Model) Init() tea.Cmd { return tea.Batch(m.backend.autostart(), m.refresh(), tickDashboard()) }
@@ -49,11 +50,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case actionRequestMsg:
 		cmd := m.backend.run(msg, m.snapshot.config)
 		if (msg.target == actionDaemon || msg.target == actionGateway) && msg.index == 1 {
-			return tea.Batch(cmd, tickShutdown())
+			return tea.Batch(cmd, m.services.spin.Tick)
 		}
 		return cmd
-	case shutdownTickMsg:
-		return m.continueShutdownTick()
+	case spinner.TickMsg:
+		return m.advanceSpinner(msg)
 	case actionResultMsg:
 		m.services.setResult(msg)
 		return m.refresh()
@@ -91,11 +92,13 @@ func (m *Model) updateModelMessage(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (m *Model) continueShutdownTick() tea.Cmd {
-	if m.services.animateShutdown() {
-		return tickShutdown()
+func (m *Model) advanceSpinner(msg tea.Msg) tea.Cmd {
+	if !m.services.anyStopping() {
+		return nil
 	}
-	return nil
+	var cmd tea.Cmd
+	m.services.spin, cmd = m.services.spin.Update(msg)
+	return cmd
 }
 
 func (m *Model) updateAutostart(msg autostartResultMsg) tea.Cmd {
@@ -154,14 +157,9 @@ func (m *Model) refresh() tea.Cmd {
 }
 
 type dashboardTickMsg struct{}
-type shutdownTickMsg struct{}
 
 func tickDashboard() tea.Cmd {
 	return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return dashboardTickMsg{} })
-}
-
-func tickShutdown() tea.Cmd {
-	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return shutdownTickMsg{} })
 }
 
 func (m *Model) ActiveTab() Tab           { return m.active }

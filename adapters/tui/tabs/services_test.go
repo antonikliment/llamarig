@@ -71,8 +71,8 @@ func TestDaemonStopLocksOnlyDaemonPanel(t *testing.T) {
 	if tab.selected[servicePanelDaemon] != 1 {
 		t.Fatal("daemon action changed while locked")
 	}
-	if !tab.animateShutdown() || tab.frame[servicePanelDaemon] != 1 {
-		t.Fatalf("frame=%v stopping=%v", tab.frame, tab.stopping)
+	if !tab.anyStopping() {
+		t.Fatalf("stopping=%v", tab.stopping)
 	}
 	tab.Update(keyMsg("tab"))
 	if tab.focus != servicePanelHTTP {
@@ -86,9 +86,9 @@ func TestDaemonStopLocksOnlyDaemonPanel(t *testing.T) {
 
 func TestDaemonViewShowsShutdownAnimation(t *testing.T) {
 	tab := NewServicesTab()
-	tab.stopping[servicePanelDaemon], tab.frame[servicePanelDaemon] = true, 2
+	tab.stopping[servicePanelDaemon] = true
 	view := tab.View(160, 40, dashboardSnapshot{daemon: process.DetachedStatus{Running: true}, warnings: map[string]string{}})
-	for _, want := range []string{"Shutting down..", "Controls locked while stopping"} {
+	for _, want := range []string{"Shutting down", "Controls locked while stopping"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}
@@ -102,9 +102,8 @@ func TestGatewayStopLocksAndAnimatesGatewayPanel(t *testing.T) {
 	if request.target != actionGateway || !tab.stopping[servicePanelHTTP] {
 		t.Fatalf("request=%#v stopping=%v", request, tab.stopping)
 	}
-	tab.animateShutdown()
 	view := tab.View(160, 40, dashboardSnapshot{gateway: process.DetachedStatus{Running: true}, warnings: map[string]string{}})
-	for _, want := range []string{"Shutting down.", "Controls locked while stopping"} {
+	for _, want := range []string{"Shutting down", "Controls locked while stopping"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}
@@ -164,10 +163,10 @@ func TestServicePanelWidthUsesThreeWideColumns(t *testing.T) {
 
 func TestHTTPActionsHighlightOnlyWhenFocused(t *testing.T) {
 	snapshot := dashboardSnapshot{warnings: map[string]string{}}
-	if view := ansi.Strip(renderHTTP(52, 10, snapshot, 0, false, false, 0, "", "")); strings.Contains(view, "[Start]") {
+	if view := ansi.Strip(renderHTTP(52, 10, snapshot, 0, false, false, "", "", "")); strings.Contains(view, "[Start]") {
 		t.Fatalf("unfocused actions highlighted:\n%s", view)
 	}
-	if view := ansi.Strip(renderHTTP(52, 10, snapshot, 0, true, false, 0, "", "")); !strings.Contains(view, "[Start]") {
+	if view := ansi.Strip(renderHTTP(52, 10, snapshot, 0, true, false, "", "", "")); !strings.Contains(view, "[Start]") {
 		t.Fatalf("focused action not highlighted:\n%s", view)
 	}
 }

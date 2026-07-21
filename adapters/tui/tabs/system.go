@@ -2,12 +2,12 @@ package tabs
 
 import (
 	"fmt"
-	"image/color"
 	"llamarig/adapters/tui/ui"
 	"math"
-	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	controlv1 "llamarig/core/rpc/gen/v1"
@@ -16,23 +16,26 @@ import (
 var resourceStyle = lipgloss.NewStyle().Foreground(ui.Cyan)
 var warningStyle = lipgloss.NewStyle().Foreground(ui.Yellow)
 
-type SystemTab struct{ scroll int }
+type SystemTab struct{ vp viewport.Model }
+
+func NewSystemTab() SystemTab { return SystemTab{vp: viewport.New()} }
 
 func (t *SystemTab) Update(msg tea.Msg, keys KeyMap) {
 	if pressed, ok := msg.(tea.KeyPressMsg); ok {
 		if key.Matches(pressed, keys.Up) {
-			t.scroll = max(0, t.scroll-1)
+			t.vp.ScrollUp(1)
 		}
 		if key.Matches(pressed, keys.Down) {
-			t.scroll++
+			t.vp.ScrollDown(1)
 		}
 	}
 }
 
 func (t *SystemTab) View(width, height int, snapshot dashboardSnapshot) string {
-	content := renderSystem(width, snapshot.resources, snapshot.warnings["resources"])
-	t.scroll = min(t.scroll, max(0, strings.Count(content, "\n")+1-height))
-	return ui.VerticalSlice(content, t.scroll, height)
+	t.vp.SetWidth(width)
+	t.vp.SetHeight(height)
+	t.vp.SetContent(renderSystem(width, snapshot.resources, snapshot.warnings["resources"]))
+	return t.vp.View()
 }
 
 func renderSystem(width int, resources *controlv1.SignalsSnapshot, warning string) string {
@@ -62,7 +65,8 @@ func systemResourcesDetailPanel(width int, height int, resources *controlv1.Sign
 
 func resourceRow(label string, percent float64, detail string) string {
 	rounded := int(math.Round(percent))
-	row := fmt.Sprintf("%-5s %s %3d%%", label+":", resourceMeter(rounded), rounded)
+	// Pad to fit the longest label ("Models:") so every meter starts in the same column.
+	row := fmt.Sprintf("%-8s %s %3d%%", label+":", resourceMeter(rounded), rounded)
 	if detail != "" {
 		row += "  " + ui.MutedStyle.Render(detail)
 	}
@@ -70,25 +74,10 @@ func resourceRow(label string, percent float64, detail string) string {
 	return row
 }
 
-func resourceMeter(percent int) string {
-	const segments = 20
-	percent = max(0, min(100, percent))
-	filled := percent * segments / 100
-	bar := lipgloss.NewStyle().Foreground(meterColor(percent)).Render(strings.Repeat("█", filled))
-	return bar + ui.MutedStyle.Render(strings.Repeat("░", segments-filled))
-}
+var meter = progress.New(progress.WithWidth(20), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage(), progress.WithColors(ui.Green))
 
-// meterColor shades a meter green/yellow/red by load so the fill conveys
-// severity through shape and hue, not the cyan-only block of the old bars.
-func meterColor(percent int) color.Color {
-	switch {
-	case percent >= 90:
-		return ui.Red
-	case percent >= 70:
-		return ui.Yellow
-	default:
-		return ui.Green
-	}
+func resourceMeter(percent int) string {
+	return meter.ViewAs(float64(max(0, min(100, percent))) / 100)
 }
 
 func bytePair(used uint64, total uint64) string {
