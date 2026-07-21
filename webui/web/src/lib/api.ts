@@ -110,6 +110,11 @@ export function createApiClient(getSession: () => SessionState, fetcher: typeof 
   };
 }
 
+// legacy converts a Protobuf-ES message into the legacy snake_case JSON shape
+// the app expects. Two caveats: int64/uint64 fields (bigint) are narrowed to
+// Number, so values above 2^53 lose precision; and every object key is
+// snake-cased, which would corrupt any dynamic map<string,X> keys (the control
+// schema currently uses none).
 function legacy<T>(value: unknown): T {
   if (typeof value === 'bigint') return Number(value) as T;
   if (Array.isArray(value)) return value.map(legacy) as T;

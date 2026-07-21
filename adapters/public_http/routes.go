@@ -42,6 +42,9 @@ func (s *Server) controlRPCAuth(next http.Handler) http.Handler {
 	})
 }
 
+// publicControlProcedure reports whether a control procedure is readable
+// without authentication. This allowlist is the single authorization source:
+// any procedure not listed here requires a bearer token (see controlRPCAuth).
 func publicControlProcedure(path string) bool {
 	switch path {
 	case controlv1connect.ControlServiceHealthProcedure,
