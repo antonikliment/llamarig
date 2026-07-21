@@ -156,7 +156,7 @@ var logPaneMeta = [paneCount]struct {
 	accent color.Color
 }{
 	paneDaemon: {"Daemon — zap", ui.Green},
-	paneLlama:  {"Llama server", ui.Purple},
+	paneLlama:  {"Llama server", ui.Cyan},
 }
 
 func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {

@@ -7,7 +7,6 @@ var (
 	Blue   = lipgloss.Color("12")
 	Yellow = lipgloss.Color("11")
 	Red    = lipgloss.Color("9")
-	Purple = lipgloss.Color("13")
 	Cyan   = lipgloss.Color("14")
 	Muted  = lipgloss.Color("8")
 
