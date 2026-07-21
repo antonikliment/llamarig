@@ -30,7 +30,7 @@ log routes.
   server stream instead of `EventSource`.
 - [x] Generated TypeScript stays untracked and is reproduced by the web scripts
   with `protoc-gen-es`; `pnpm run verify:web` passes.
-- [ ] Draft PR opened.
+- [x] Draft PR opened: [#22](https://github.com/antonikliment/llamarig/pull/22).
 
 The `/health`, `/info`, `/api/logs`, and `/mcp` HTTP surfaces remain because
 they are gateway-owned concerns or intentionally outside the control schema.
