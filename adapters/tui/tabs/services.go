@@ -268,14 +268,14 @@ func runtimePresetLine(preset *controlv1.RuntimePreset, autostart bool) string {
 }
 
 func servicesOverview(width, gap, panelWidth int, keys KeyMap, focus servicePanel) string {
-	showAutostart := focus == servicePanelModels
+	_ = focus
 	if width < 96 {
-		return ui.Flow(width, gap, []string{ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(llamaRigContent()), ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(quickHelpContent(keys, showAutostart))})
+		return ui.Flow(width, gap, []string{ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(llamaRigContent()), ui.PanelStyle(ui.Muted, false).Width(panelWidth).Height(7).Render(quickHelpContent(keys))})
 	}
 	inner, column := width-4, (width-5)/2
 	columns := []string{
 		lipgloss.NewStyle().Width(column).Height(6).Render(llamaRigContent()),
-		lipgloss.NewStyle().Width(inner - column - 1).Height(6).PaddingLeft(1).Render(quickHelpContent(keys, showAutostart)),
+		lipgloss.NewStyle().Width(inner - column - 1).Height(6).PaddingLeft(1).Render(quickHelpContent(keys)),
 	}
 	separator := ui.MutedStyle.Render(strings.Repeat("│\n", 5) + "│")
 	return ui.PanelStyle(ui.Muted, false).Width(width).Render(lipgloss.JoinHorizontal(lipgloss.Top, columns[0], separator, columns[1]))
@@ -284,13 +284,12 @@ func servicesOverview(width, gap, panelWidth int, keys KeyMap, focus servicePane
 func llamaRigContent() string {
 	return lipgloss.JoinVertical(lipgloss.Left, ui.BrandStyle.Render(config.ProjectDisplayName), config.ProjectDisplayName+" is a local AI config server.", "It exposes running and configuring llama.cpp instances,", "with unified HTTP and MCP interfaces.")
 }
-func quickHelpContent(keys KeyMap, showAutostart bool) string {
-	lines := quickHelpLines(keys)
-	autostartLine := lines[6]
-	if !showAutostart {
-		autostartLine = ui.MutedStyle.Render(autostartLine)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, ui.MutedStyle.Render("Quick Help"), fmt.Sprintf("%-22s %s", lines[0], lines[1]), fmt.Sprintf("%-22s %s", lines[2], lines[3]), fmt.Sprintf("%-22s %s", lines[4], lines[5]), autostartLine)
+func quickHelpContent(keys KeyMap) string {
+	return lipgloss.JoinVertical(lipgloss.Left, ui.MutedStyle.Render("Quick Help"),
+		helpModel.FullHelpView([][]bindkey.Binding{
+			{keys.NextPanel, keys.NextAction, keys.RunAction, keys.ToggleAutostart},
+			{keys.ServicesTab, keys.Refresh, keys.Quit},
+		}))
 }
 
 func servicePanelWidth(total, gap int) int {

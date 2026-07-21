@@ -382,5 +382,5 @@ func formatBytes(size int64) string {
 }
 
 func modelHelp(keys KeyMap) string {
-	return ui.MutedStyle.Render("Quick Help  " + helpText(keys.Up) + "  " + helpText(keys.RunAction) + "  Tab Focus  d Delete  " + helpText(keys.ServicesTab) + "  " + helpText(keys.Refresh) + "  " + helpText(keys.Quit))
+	return helpLine(keys.Up, keys.RunAction, keys.NextPanel, keys.ServicesTab, keys.Refresh, keys.Quit)
 }

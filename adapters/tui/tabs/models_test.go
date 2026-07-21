@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	controlv1 "llamarig/core/rpc/gen/v1"
 )
 
@@ -82,8 +83,8 @@ func TestRuntimePresetLine(t *testing.T) {
 func TestModelsViewShowsPresetFieldsAndHelp(t *testing.T) {
 	tab := NewModelsTab()
 	preset := &presetView{Name: "chat", Model: "/models/chat.gguf"}
-	view := tab.View(120, 20, dashboardSnapshot{presets: []presetView{*preset}})
-	for _, want := range []string{"Quick Help", "Enter Run", "chat", "chat.gguf", "Stopped"} {
+	view := ansi.Strip(tab.View(120, 20, dashboardSnapshot{presets: []presetView{*preset}}))
+	for _, want := range []string{"Enter Run", "chat", "chat.gguf", "Stopped"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("missing %q:\n%s", want, view)
 		}
