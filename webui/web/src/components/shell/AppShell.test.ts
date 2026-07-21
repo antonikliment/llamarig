@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLlamaRigState } from '../../lib/state/createLlamaRigState.svelte';
@@ -41,7 +41,9 @@ describe('AppShell', () => {
     await userEvent.click(await screen.findByText('Dark'));
     expect(setMode).toHaveBeenCalledWith('dark');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Choose color theme' }));
+    const themeButton = screen.getByRole('button', { name: 'Choose color theme' });
+    await waitFor(() => expect(getComputedStyle(themeButton).pointerEvents).not.toBe('none'));
+    await userEvent.click(themeButton);
     await userEvent.click(await screen.findByText('System'));
     expect(resetMode).toHaveBeenCalledOnce();
   });

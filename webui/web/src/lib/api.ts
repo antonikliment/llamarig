@@ -1,3 +1,6 @@
+import { createClient, type Interceptor } from '@connectrpc/connect';
+import { createConnectTransport } from '@connectrpc/connect-web';
+import { ControlService } from './gen/v1/control_pb';
 import type {
   CatalogQuery,
   EventsResponse,
@@ -9,7 +12,6 @@ import type {
   LogArchivesResponse,
   ModelDownloadResponse,
   ModelResolution,
-  ModelPreset,
   OperationResponse,
   PresetEntry,
   PresetResponse,
@@ -29,6 +31,17 @@ export function apiUrl(path: string, apiBase: string, locationProtocol = window.
 }
 
 export function createApiClient(getSession: () => SessionState, fetcher: typeof fetch = fetch) {
+  const auth: Interceptor = (next) => (request) => {
+    const token = getSession().token.trim();
+    if (token) request.header.set('Authorization', `Bearer ${token}`);
+    return next(request);
+  };
+  const control = () => createClient(ControlService, createConnectTransport({
+    baseUrl: apiUrl('/', getSession().apiBase).replace(/\/$/, '') || '/',
+    fetch: fetcher,
+    interceptors: [auth]
+  }));
+
   async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers = new Headers(options.headers || {});
     const session = getSession();
@@ -46,79 +59,72 @@ export function createApiClient(getSession: () => SessionState, fetcher: typeof 
   }
 
   return {
-    getInfo: () => request<InfoResponse>('/api/info'),
-    getRuntimeStatus: () => request<RuntimeStatusResponse>('/api/runtime/status'),
-    getLlamaServerParams: () => request<LlamaServerParamsResponse>('/api/runtime/llama-params'),
-    getSignals: () => request<SignalsResponse>('/api/signals'),
-    getEvents: () => request<EventsResponse>('/api/events'),
+    getInfo: async () => {
+      const response = await control().getInfo({});
+      return legacy<InfoResponse>({ ...response.info, build: response.build });
+    },
+    getRuntimeStatus: async () => legacy<RuntimeStatusResponse>((await control().getRuntimeStatus({})).status),
+    getLlamaServerParams: async () => legacy<LlamaServerParamsResponse>(await control().getLlamaServerParams({})),
+    getSignals: async () => legacy<SignalsResponse>(await control().getSignals({})),
+    getEvents: async () => legacy<EventsResponse>(await control().listEvents({})),
     getLogs: (source = 'control', lines = 500) => request<LogsResponse>(`/api/logs?source=${encodeURIComponent(source)}&lines=${lines}`),
     listLogArchives: () => request<LogArchivesResponse>('/api/logs/archives'),
     getLogArchive: (id: string, lines = 500) => request<LogsResponse>(`/api/logs/archives/${encodeURIComponent(id)}?lines=${lines}`),
     deleteLogArchive: (id: string) => request<{ ok: boolean; deleted: number }>(`/api/logs/archives/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     clearLogArchives: () => request<{ ok: boolean; deleted: number }>('/api/logs/archives', { method: 'DELETE' }),
-    startRuntime: (name: string) =>
-      request<OperationResponse>(`/api/runtime/start?preset=${encodeURIComponent(name)}`, { method: 'POST' }),
-    stopRuntime: (name = '') =>
-      request<OperationResponse>(`/api/runtime/stop${name ? `?preset=${encodeURIComponent(name)}` : ''}`, { method: 'POST' }),
-    restartRuntime: (name: string) =>
-      request<OperationResponse>(`/api/runtime/restart?preset=${encodeURIComponent(name)}`, { method: 'POST' }),
-    listPresets: () => request<PresetsResponse>('/api/presets'),
-    getPreset: (name: string) => request<PresetResponse>(`/api/presets/${encodeURIComponent(name)}`),
-    createPreset: (body: { name: string; entries: PresetEntry[] }) =>
-      request<PresetResponse>('/api/presets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }),
-    replacePreset: (name: string, body: { entries: PresetEntry[] }) =>
-      request<PresetResponse>(`/api/presets/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }),
-    deletePreset: (name: string) => request<{ ok: boolean }>(`/api/presets/${encodeURIComponent(name)}`, { method: 'DELETE' }),
-    cleanupPreset: (name: string) => request<{ ok: boolean }>(`/api/presets/${encodeURIComponent(name)}/cleanup`, { method: 'POST' }),
-    setPresetAutostart: (name: string, enabled: boolean) =>
-      request<{ ok: boolean }>(`/api/presets/${encodeURIComponent(name)}/autostart`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      }),
-    listLocalModels: () => request<LocalModelsResponse>('/api/models/local'),
-    deleteLocalModel: (path: string, cascadePresets = false) =>
-      request(`/api/models/local?path=${encodeURIComponent(path)}&cascade_presets=${cascadePresets}`, { method: 'DELETE' }),
-    listModelCatalog: (params: CatalogQuery = {}) => {
-      const query = new URLSearchParams();
-      if (params.limit) query.set('limit', String(params.limit));
-      if (params.sort) query.set('sort', params.sort);
-      if (params.search) query.set('search', params.search);
-      if (params.min_fit) query.set('min_fit', params.min_fit);
-      const suffix = query.toString();
-      return request<ModelCatalogResponse>(`/api/models/catalog${suffix ? `?${suffix}` : ''}`);
-    },
-    modelCatalogEventsUrl: () => apiUrl('/api/models/catalog/events', getSession().apiBase),
-    resolveModel: (url: string) =>
-      request<ModelResolution>('/api/models/resolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      }),
-    startModelDownload: (body: { url: string; filename: string }) =>
-      request<ModelDownloadResponse>('/api/models/downloads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      }),
-    getModelDownload: (id: string) => request<ModelDownloadResponse>(`/api/models/downloads/${encodeURIComponent(id)}`),
-    cancelModelDownload: (id: string) =>
-      request<ModelDownloadResponse>(`/api/models/downloads/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-    applyModelToPreset: (id: string, body: { preset: string; preview?: boolean }) =>
-      request<OperationResponse & { command?: unknown; preview?: unknown }>(`/api/models/downloads/${encodeURIComponent(id)}/apply-to-preset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
+    startRuntime: async (target: string) => legacy<OperationResponse>(await control().startRuntime({ target })),
+    stopRuntime: async (target = '') => legacy<OperationResponse>(await control().stopRuntime({ target })),
+    restartRuntime: async (target: string) => legacy<OperationResponse>(await control().restartRuntime({ target })),
+    listPresets: async () => legacy<PresetsResponse>(await control().listPresets({})),
+    getPreset: async (name: string) => legacy<PresetResponse>(await control().getPreset({ name })),
+    createPreset: async (body: { name: string; entries: PresetEntry[] }) =>
+      legacy<PresetResponse>(await control().putPreset({ preset: body, createOnly: true })),
+    replacePreset: async (name: string, body: { entries: PresetEntry[] }) =>
+      legacy<PresetResponse>(await control().putPreset({ preset: { name, entries: body.entries } })),
+    deletePreset: async (name: string) => legacy<{ ok: boolean }>(await control().deletePreset({ name })),
+    cleanupPreset: async (name: string) => legacy<{ ok: boolean }>(await control().cleanupPreset({ name })),
+    setPresetAutostart: async (name: string, enabled: boolean) =>
+      legacy<{ ok: boolean }>(await control().setPresetAutostart({ name, enabled })),
+    listLocalModels: async () => legacy<LocalModelsResponse>(await control().listLocalModels({})),
+    deleteLocalModel: async (path: string, cascadePresets = false) =>
+      legacy(await control().deleteLocalModel({ path, cascadePresets })),
+    listModelCatalog: async (params: CatalogQuery = {}) => legacy<ModelCatalogResponse>(await control().listModelCatalog({
+      limit: params.limit,
+      sort: params.sort,
+      search: params.search,
+      minFit: params.min_fit
+    })),
+    watchModelCatalog: (signal: AbortSignal) => control().watchModelCatalog({}, { signal }),
+    resolveModel: async (url: string) => legacy<ModelResolution>((await control().resolveModel({ url })).resolution),
+    startModelDownload: async (body: { url: string; filename: string }) =>
+      legacy<ModelDownloadResponse>(await control().startModelDownload(body)),
+    getModelDownload: async (id: string) => legacy<ModelDownloadResponse>(await control().getModelDownload({ id })),
+    cancelModelDownload: async (id: string) => legacy<ModelDownloadResponse>(await control().cancelModelDownload({ id })),
+    applyModelToPreset: async (id: string, body: { preset: string; preview?: boolean }) => {
+      const response = await control().applyModelDownloadToPreset({ id, preset: body.preset, preview: body.preview });
+      return legacy<OperationResponse & { preview?: unknown }>({
+        ...response,
+        preview: response.previewDiff
+      });
+    }
   };
+}
+
+// legacy converts a Protobuf-ES message into the legacy snake_case JSON shape
+// the app expects. Two caveats: int64/uint64 fields (bigint) are narrowed to
+// Number, so values above 2^53 lose precision; and every object key is
+// snake-cased, which would corrupt any dynamic map<string,X> keys (the control
+// schema currently uses none).
+function legacy<T>(value: unknown): T {
+  if (typeof value === 'bigint') return Number(value) as T;
+  if (Array.isArray(value)) return value.map(legacy) as T;
+  if (value && typeof value === 'object') {
+    return Object.entries(value).reduce<Record<string, unknown>>((result, [key, child]) => {
+      if (!key.startsWith('$')) result[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] = legacy(child);
+      return result;
+    }, {}) as T;
+  }
+  return value as T;
 }
 
 function apiError(response: Response, data: unknown) {

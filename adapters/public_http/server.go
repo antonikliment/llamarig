@@ -14,7 +14,7 @@ type Server struct {
 	app                http.Handler
 	disableOriginCheck bool
 	internalControl    controlv1connect.ControlServiceClient
-	internalStream     controlv1connect.ControlServiceClient
+	internalRPC        http.Handler
 }
 
 type Dependencies struct {
@@ -30,7 +30,7 @@ func NewServer(deps Dependencies) *Server {
 		s.app = appHandler(deps.AppFS)
 	}
 	s.internalControl = newInternalControlClient(deps.InternalSocketPath)
-	s.internalStream = newInternalStreamingControlClient(deps.InternalSocketPath)
+	s.internalRPC = newInternalControlProxy(deps.InternalSocketPath)
 	s.routes()
 	return s
 }

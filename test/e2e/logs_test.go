@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,4 +45,19 @@ func TestGatewayDaemonLogs(t *testing.T) {
 			t.Fatalf("/api/logs text missing %q:\n%s", want, text)
 		}
 	}
+}
+
+func gatewayJSON(t *testing.T, handler http.Handler, method, target, _ string) map[string]any {
+	t.Helper()
+	request := httptest.NewRequest(method, target, nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("%s %s -> %d: %s", method, target, response.Code, response.Body.String())
+	}
+	result := map[string]any{}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
 }

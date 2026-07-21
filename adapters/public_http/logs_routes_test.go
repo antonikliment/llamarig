@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"llamarig/config"
-	"llamarig/core/rpc"
 	"llamarig/platform/audit"
 )
 
@@ -18,7 +17,7 @@ func TestHTTPLogTailAndArchiveLifecycle(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.ProjectHomeEnv, home)
 	writeHTTPLog(t, config.ProjectName, "one\ntwo\nthree\n")
-	server := newHTTPTestServer(t, rpc.RPCDependencies{}, Dependencies{AuthToken: "secret"})
+	server := NewServer(Dependencies{AuthToken: "secret", InternalSocketPath: filepath.Join(t.TempDir(), "missing.sock")})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/logs?source=control&lines=2", nil)
 	req.Header.Set("Authorization", "Bearer secret")
@@ -56,8 +55,12 @@ func TestHTTPLogTailAndArchiveLifecycle(t *testing.T) {
 
 func TestHTTPLogRoutesRequireAuthAndValidateInput(t *testing.T) {
 	t.Setenv(config.ProjectHomeEnv, t.TempDir())
-	server := newHTTPTestServer(t, rpc.RPCDependencies{}, Dependencies{AuthToken: "secret"})
-	assertStatus(t, server, http.MethodGet, "/api/logs", nil, http.StatusForbidden)
+	server := NewServer(Dependencies{AuthToken: "secret", InternalSocketPath: filepath.Join(t.TempDir(), "missing.sock")})
+	unauthorized := httptest.NewRecorder()
+	server.Handler().ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/logs", nil))
+	if unauthorized.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized status=%d", unauthorized.Code)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/logs?source=unknown&lines=0", nil)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()

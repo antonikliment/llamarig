@@ -75,6 +75,7 @@ vendor/
 
 # ─── Generated protobuf / buf code ──────────────────────────
 core/rpc/gen/v1
+webui/web/src/lib/gen/
 
 # ─── Web UI (Svelte / Vite / pnpm) ──────────────────────────
 node_modules/
