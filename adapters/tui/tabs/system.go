@@ -65,7 +65,8 @@ func systemResourcesDetailPanel(width int, height int, resources *controlv1.Sign
 
 func resourceRow(label string, percent float64, detail string) string {
 	rounded := int(math.Round(percent))
-	row := fmt.Sprintf("%-5s %s %3d%%", label+":", resourceMeter(rounded), rounded)
+	// Pad to fit the longest label ("Models:") so every meter starts in the same column.
+	row := fmt.Sprintf("%-8s %s %3d%%", label+":", resourceMeter(rounded), rounded)
 	if detail != "" {
 		row += "  " + ui.MutedStyle.Render(detail)
 	}
