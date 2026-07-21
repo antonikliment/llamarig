@@ -7,7 +7,6 @@ var (
 	Blue   = lipgloss.Color("12")
 	Yellow = lipgloss.Color("11")
 	Red    = lipgloss.Color("9")
-	Purple = lipgloss.Color("13")
 	Cyan   = lipgloss.Color("14")
 	Muted  = lipgloss.Color("8")
 
@@ -16,6 +15,7 @@ var (
 	FooterStyle      = lipgloss.NewStyle()
 	BrandStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
 	MutedStyle       = lipgloss.NewStyle().Foreground(Muted)
+	SubtleStyle      = lipgloss.NewStyle().Foreground(Muted).Faint(true)
 	GreenStyle       = lipgloss.NewStyle().Foreground(Green)
 	ActiveTabStyle   = lipgloss.NewStyle().Foreground(Blue).Bold(true).Underline(true)
 	InactiveTabStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))

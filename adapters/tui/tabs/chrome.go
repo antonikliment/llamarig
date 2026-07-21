@@ -37,7 +37,7 @@ func RenderHeader(props ChromeProps) string {
 }
 
 func RenderFooter(props ChromeProps) string {
-	status := ui.GreenStyle.Render("Status: Ready")
+	status := ui.SubtleStyle.Render("Status: Ready")
 	switch {
 	case props.Warning != "":
 		status = warningStyle.Render("Status: " + props.Warning)
@@ -48,7 +48,7 @@ func RenderFooter(props ChromeProps) string {
 	if !props.Refreshed.IsZero() {
 		refreshed = props.Refreshed.Format("15:04:05")
 	}
-	right := ui.MutedStyle.Render("Last refreshed: " + refreshed)
+	right := ui.SubtleStyle.Render("Last refreshed: " + refreshed)
 	space := max(1, props.Width-lipgloss.Width(status)-lipgloss.Width(right))
 
 	return ui.FooterStyle.Width(props.Width).Render(status + strings.Repeat(" ", space) + right)

@@ -229,7 +229,7 @@ func renderRuntime(width, height int, status *controlv1.RuntimeStatus, warning s
 	if count > 0 {
 		stateColor = ui.Green
 	}
-	content := []string{ui.StatusTitle("Llama Runtimes", fmt.Sprintf("%d running", count), ui.Purple, stateColor, width)}
+	content := []string{ui.StatusTitle("Llama Runtimes", fmt.Sprintf("%d running", count), ui.Cyan, stateColor, width)}
 	if warning != "" {
 		content = append(content, warningStyle.Render("Unavailable: control socket"))
 	} else if count == 0 {
@@ -241,8 +241,8 @@ func renderRuntime(width, height int, status *controlv1.RuntimeStatus, warning s
 			}
 		}
 	}
-	content = append(content, ui.Rule(width), ui.ActionRow(ui.Purple, 0, []string{"Stop " + target}, focused && target != ""))
-	return renderActionPanel(content, width, height, focused, message, actionErr, ui.Purple)
+	content = append(content, ui.Rule(width), ui.ActionRow(ui.Cyan, 0, []string{"Stop " + target}, focused && target != ""))
+	return renderActionPanel(content, width, height, focused, message, actionErr, ui.Cyan)
 }
 
 func (t *ServicesTab) syncRuntimes(status *controlv1.RuntimeStatus, presets []presetView) {

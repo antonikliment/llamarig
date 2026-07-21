@@ -3,10 +3,23 @@ package tabs
 import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/lipgloss/v2"
 )
 
 // helpModel renders keybinding help lines (bubbles/help) shared across tabs.
-var helpModel = help.New()
+// The bubbles defaults are quite dim; brighten the keys/descriptions so the
+// help footer stays legible.
+var helpModel = brightHelp()
+
+func brightHelp() help.Model {
+	h := help.New()
+	brightKey, brightDesc := lipgloss.Color("252"), lipgloss.Color("250")
+	h.Styles.ShortKey = h.Styles.ShortKey.Foreground(brightKey)
+	h.Styles.FullKey = h.Styles.FullKey.Foreground(brightKey)
+	h.Styles.ShortDesc = h.Styles.ShortDesc.Foreground(brightDesc)
+	h.Styles.FullDesc = h.Styles.FullDesc.Foreground(brightDesc)
+	return h
+}
 
 // helpLine renders the given bindings as a single "key desc • key desc" line.
 func helpLine(bindings ...key.Binding) string { return helpModel.ShortHelpView(bindings) }

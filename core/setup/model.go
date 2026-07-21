@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 
 	"llamarig/config"
 )
@@ -64,7 +65,7 @@ func RunWizard(ctx context.Context, paths Paths) (Answers, error) {
 			}, []any{&answers, &startup}),
 			huh.NewConfirm().Title("Write configuration files?").Value(&proceed),
 		),
-	)
+	).WithTheme(huh.ThemeFunc(tealStyles))
 
 	if err := runForm(ctx, form); err != nil {
 		return Answers{}, err
@@ -79,6 +80,28 @@ func RunWizard(ctx context.Context, paths Paths) (Answers, error) {
 		return Answers{}, err
 	}
 	return answers, nil
+}
+
+// tealStyles is huh's Charm theme with its fuchsia/pink accents recolored teal,
+// so the wizard matches the rest of the TUI instead of the library default pink.
+func tealStyles(isDark bool) *huh.Styles {
+	teal := lipgloss.Color("14")
+	s := huh.ThemeCharm(isDark)
+	s.Focused.SelectSelector = s.Focused.SelectSelector.Foreground(teal)
+	s.Focused.NextIndicator = s.Focused.NextIndicator.Foreground(teal)
+	s.Focused.PrevIndicator = s.Focused.PrevIndicator.Foreground(teal)
+	s.Focused.MultiSelectSelector = s.Focused.MultiSelectSelector.Foreground(teal)
+	s.Focused.FocusedButton = s.Focused.FocusedButton.Background(teal)
+	s.Focused.Next = s.Focused.FocusedButton
+	s.Focused.TextInput.Prompt = s.Focused.TextInput.Prompt.Foreground(teal)
+	// Re-derive Blurred from the recolored Focused (matching ThemeCharm's own
+	// derivation) so the pink does not survive on unfocused fields.
+	s.Blurred = s.Focused
+	s.Blurred.Base = s.Focused.Base.BorderStyle(lipgloss.HiddenBorder())
+	s.Blurred.Card = s.Blurred.Base
+	s.Blurred.NextIndicator = lipgloss.NewStyle()
+	s.Blurred.PrevIndicator = lipgloss.NewStyle()
+	return s
 }
 
 func normalizeAnswers(a *Answers, startup string) {

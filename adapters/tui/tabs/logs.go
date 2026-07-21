@@ -150,42 +150,82 @@ func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 	}
 }
 
+// logPaneMeta describes each log as a switchable sub-tab.
+var logPaneMeta = [paneCount]struct {
+	title  string
+	accent color.Color
+}{
+	paneDaemon: {"Daemon — zap", ui.Green},
+	paneLlama:  {"Llama server", ui.Cyan},
+}
+
 func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
-	const helpHeight = 3
-	paneHeight := max(3, (height-helpHeight)/2)
+	const stripHeight, helpHeight = 1, 3
+	paneHeight := max(3, height-stripHeight-helpHeight)
 
-	daemonLines := renderDaemonLog(filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value()))
-	llamaLines := renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value()))
+	lines := [paneCount][]string{
+		paneDaemon: renderDaemonLog(filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value())),
+		paneLlama:  renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())),
+	}
 
-	daemonPanel := t.renderLogPane(paneDaemon, "Daemon — zap", ui.Green, width, paneHeight, daemonLines)
-	llamaPanel := t.renderLogPane(paneLlama, "Llama server", ui.Purple, width, paneHeight, llamaLines)
+	active := t.renderLogPane(t.focus, logPaneMeta[t.focus].accent, width, paneHeight, lines[t.focus])
 
-	body := lipgloss.JoinVertical(lipgloss.Left, daemonPanel, llamaPanel, logsHelp(width, t))
+	body := lipgloss.JoinVertical(lipgloss.Left, t.tabStrip(lines), active, logsHelp(width, t))
 	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
 
-func (t *LogsTab) renderLogPane(pane logPane, title string, accent color.Color, width, height int, lines []string) string {
+var inactiveLogTabStyle = lipgloss.NewStyle().Foreground(ui.Muted).Padding(0, 1)
+
+func activeLogTabStyle(accent color.Color) lipgloss.Style {
+	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
+}
+
+// tabStrip renders both logs as labelled tabs (with line counts) so it is clear
+// there are two, highlighting the active one as a filled chip; the inactive log
+// is minimized to just its tab label.
+func (t *LogsTab) tabStrip(lines [paneCount][]string) string {
+	chips := make([]string, 0, paneCount)
+	for pane := logPane(0); pane < paneCount; pane++ {
+		text := fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
+		if t.focus == pane {
+			chips = append(chips, activeLogTabStyle(logPaneMeta[pane].accent).Render(text))
+		} else {
+			chips = append(chips, inactiveLogTabStyle.Render(text))
+		}
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, chips[paneDaemon], " ", chips[paneLlama])
+}
+
+func (t *LogsTab) renderLogPane(pane logPane, accent color.Color, width, height int, lines []string) string {
 	vp := &t.vp[pane]
 	vp.SetWidth(width - 4)
-	vp.SetHeight(max(1, height-3)) // panel border (2) + header line (1)
+	vp.SetHeight(max(1, height-2)) // panel border (2)
 	vp.SetContent(strings.Join(lines, "\n"))
 	if t.follow[pane] {
 		vp.GotoBottom()
 	}
-	header := ui.StatusTitle(title, fmt.Sprintf("%d lines", len(lines)), accent, ui.Muted, width-4)
+	// Single border (the tab chip already carries the title + line count).
 	// MaxHeight hard-clips the rendered block: wide lines may still wrap
 	// internally, but the panel's footprint never grows past height.
-	return ui.PanelStyle(accent, t.focus == pane).Width(width).Height(height).MaxHeight(height).Render(header + "\n" + vp.View())
+	return ui.PanelStyle(accent, false).Width(width).Height(height).MaxHeight(height).Render(vp.View())
 }
 
+var (
+	logSwitchKey = bindkey.NewBinding(bindkey.WithKeys("tab"), bindkey.WithHelp("Tab", "Switch log"))
+	logScrollKey = bindkey.NewBinding(bindkey.WithKeys("up", "down"), bindkey.WithHelp("↑/↓", "Scroll"))
+	logSearchKey = bindkey.NewBinding(bindkey.WithKeys("/"), bindkey.WithHelp("/", "Search"))
+	logClearKey  = bindkey.NewBinding(bindkey.WithKeys("esc"), bindkey.WithHelp("Esc", "Clear"))
+	logTabKey    = bindkey.NewBinding(bindkey.WithKeys("1", "2", "3", "4"), bindkey.WithHelp("1/2/3/4", "Switch tab"))
+)
+
 func logsHelp(width int, t *LogsTab) string {
-	status := "Tab Switch pane   ↑/↓ Scroll   / Search   Esc Clear   1/2/3/4 Switch tab"
+	status := helpLine(logSwitchKey, logScrollKey, logSearchKey, logClearKey, logTabKey)
 	if t.input[t.focus].Focused() {
-		status = "Search: " + t.input[t.focus].View() + "  (Enter/Esc to finish)"
+		status = ui.MutedStyle.Render("Search: " + t.input[t.focus].View() + "  (Enter/Esc to finish)")
 	} else if query := t.input[t.focus].Value(); query != "" {
-		status = "Search: " + query + "  (Esc to clear)"
+		status = ui.MutedStyle.Render("Search: " + query + "  (Esc to clear)")
 	}
-	return ui.PanelStyle(ui.Muted, false).Width(width).Render(ui.MutedStyle.Render(status))
+	return ui.PanelStyle(ui.Muted, false).Width(width).Render(status)
 }
 
 func filterLlamaLog(lines []string, query string) []string {

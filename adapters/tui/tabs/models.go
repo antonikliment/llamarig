@@ -214,8 +214,8 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	t.modelTable.SetWidth(width - 2)
 	t.modelTable.SetHeight(max(1, modelH-2))
 
-	presetList := ui.PanelStyle(ui.Purple, !t.focusModels).Width(width).Height(presetH).Render(t.presetPane(snapshot))
-	modelList := ui.PanelStyle(ui.Purple, t.focusModels).Width(width).Height(modelH).Render(t.modelPane(snapshot))
+	presetList := ui.PanelStyle(ui.Cyan, !t.focusModels).Width(width).Height(presetH).Render(t.presetPane(snapshot))
+	modelList := ui.PanelStyle(ui.Cyan, t.focusModels).Width(width).Height(modelH).Render(t.modelPane(snapshot))
 	var detail string
 	if t.focusModels {
 		detail = localModelDetail(width, detailH, t.selectedModel(models))
