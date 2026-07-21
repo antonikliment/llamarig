@@ -16,6 +16,7 @@ var (
 	FooterStyle      = lipgloss.NewStyle()
 	BrandStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
 	MutedStyle       = lipgloss.NewStyle().Foreground(Muted)
+	SubtleStyle      = lipgloss.NewStyle().Foreground(Muted).Faint(true)
 	GreenStyle       = lipgloss.NewStyle().Foreground(Green)
 	ActiveTabStyle   = lipgloss.NewStyle().Foreground(Blue).Bold(true).Underline(true)
 	InactiveTabStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
