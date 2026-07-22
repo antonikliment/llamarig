@@ -160,54 +160,32 @@ var logPaneMeta = [paneCount]struct {
 }
 
 func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
-	const stripHeight, helpHeight = 1, 3
-	paneHeight := max(3, height-stripHeight-helpHeight)
+	const helpHeight = 3
+	tabbedH := max(6, height-helpHeight)
 
 	lines := [paneCount][]string{
 		paneDaemon: renderDaemonLog(filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value())),
 		paneLlama:  renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())),
 	}
 
-	active := t.renderLogPane(t.focus, logPaneMeta[t.focus].accent, width, paneHeight, lines[t.focus])
-
-	body := lipgloss.JoinVertical(lipgloss.Left, t.tabStrip(lines), active, logsHelp(width, t))
-	return lipgloss.NewStyle().MaxHeight(height).Render(body)
-}
-
-var inactiveLogTabStyle = lipgloss.NewStyle().Foreground(ui.Muted).Padding(0, 1)
-
-func activeLogTabStyle(accent color.Color) lipgloss.Style {
-	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
-}
-
-// tabStrip renders both logs as labelled tabs (with line counts) so it is clear
-// there are two, highlighting the active one as a filled chip; the inactive log
-// is minimized to just its tab label.
-func (t *LogsTab) tabStrip(lines [paneCount][]string) string {
-	chips := make([]string, 0, paneCount)
+	titles := make([]string, paneCount)
+	accents := make([]color.Color, paneCount)
 	for pane := logPane(0); pane < paneCount; pane++ {
-		text := fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
-		if t.focus == pane {
-			chips = append(chips, activeLogTabStyle(logPaneMeta[pane].accent).Render(text))
-		} else {
-			chips = append(chips, inactiveLogTabStyle.Render(text))
-		}
+		titles[pane] = fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
+		accents[pane] = logPaneMeta[pane].accent
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, chips[paneDaemon], " ", chips[paneLlama])
-}
 
-func (t *LogsTab) renderLogPane(pane logPane, accent color.Color, width, height int, lines []string) string {
-	vp := &t.vp[pane]
+	vp := &t.vp[t.focus]
 	vp.SetWidth(width - 4)
-	vp.SetHeight(max(1, height-2)) // panel border (2)
-	vp.SetContent(strings.Join(lines, "\n"))
-	if t.follow[pane] {
+	vp.SetHeight(max(1, tabbedH-4)) // tab row (2) + notch line (1) + box bottom border (1)
+	vp.SetContent(strings.Join(lines[t.focus], "\n"))
+	if t.follow[t.focus] {
 		vp.GotoBottom()
 	}
-	// Single border (the tab chip already carries the title + line count).
-	// MaxHeight hard-clips the rendered block: wide lines may still wrap
-	// internally, but the panel's footprint never grows past height.
-	return ui.PanelStyle(accent, false).Width(width).Height(height).MaxHeight(height).Render(vp.View())
+
+	tabbed := ui.TabbedPanel(titles, accents, int(t.focus), width, tabbedH, vp.View())
+	body := lipgloss.JoinVertical(lipgloss.Left, tabbed, logsHelp(width, t))
+	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
 
 var (
