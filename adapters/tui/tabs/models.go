@@ -204,43 +204,32 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	detailH := max(3, height/3)
 	tableH := max(3, height-stripHeight-detailH-helpHeight)
 
-	if t.focusModels {
-		t.modelTable.Focus()
-		t.presetTable.Blur()
-	} else {
-		t.presetTable.Focus()
-		t.modelTable.Blur()
-	}
 	t.presetTable.SetWidth(width - 2)
 	t.presetTable.SetHeight(max(1, tableH-2))
 	t.modelTable.SetWidth(width - 2)
 	t.modelTable.SetHeight(max(1, tableH-2))
 
-	strip := ui.TabStrip(
-		[]string{
-			fmt.Sprintf("Presets (%d)", len(presets)),
-			fmt.Sprintf("Local models (%d)", len(models)),
-		},
-		[]color.Color{ui.Cyan, ui.Green},
-		boolToInt(t.focusModels),
-	)
-
+	active := 0
 	var panel, detail string
 	if t.focusModels {
+		active = 1
+		t.modelTable.Focus()
+		t.presetTable.Blur()
 		panel = ui.PanelStyle(ui.Green, true).Width(width).Height(tableH).Render(t.modelPane(snapshot))
 		detail = localModelDetail(width, detailH, ui.Green, t.selectedModel(models))
 	} else {
+		t.presetTable.Focus()
+		t.modelTable.Blur()
 		panel = ui.PanelStyle(ui.Cyan, true).Width(width).Height(tableH).Render(t.presetPane(snapshot))
 		detail = presetDetail(width, detailH, ui.Cyan, t.selectedPreset(presets), snapshot.runtime)
 	}
-	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, strip, panel, detail, "", modelHelp(t.keys)), 0, height)
-}
 
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
+	strip := ui.TabStrip(
+		[]string{fmt.Sprintf("Presets (%d)", len(presets)), fmt.Sprintf("Local models (%d)", len(models))},
+		[]color.Color{ui.Cyan, ui.Green},
+		active,
+	)
+	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, strip, panel, detail, "", modelHelp(t.keys)), 0, height)
 }
 
 func (t *ModelsTab) presetPane(snapshot dashboardSnapshot) string {
