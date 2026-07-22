@@ -200,36 +200,36 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	t.setRows(snapshot)
 	presets, models := snapshot.presets, snapshot.localModels
 
-	const stripHeight, helpHeight = 2, 2
+	const helpHeight = 2
 	detailH := max(3, height/3)
-	tableH := max(3, height-stripHeight-detailH-helpHeight)
+	tabbedH := max(6, height-detailH-helpHeight)
+	tableH := max(1, tabbedH-5) // tab row (2) + notch line (1) + box bottom border (1) + status row (1)
 
-	t.presetTable.SetWidth(width - 2)
-	t.presetTable.SetHeight(max(1, tableH-2))
-	t.modelTable.SetWidth(width - 2)
-	t.modelTable.SetHeight(max(1, tableH-2))
+	t.presetTable.SetWidth(width - 4)
+	t.presetTable.SetHeight(tableH)
+	t.modelTable.SetWidth(width - 4)
+	t.modelTable.SetHeight(tableH)
+
+	titles := []string{fmt.Sprintf("Presets (%d)", len(presets)), fmt.Sprintf("Local models (%d)", len(models))}
+	accents := []color.Color{ui.Cyan, ui.Green}
 
 	active := 0
-	var panel, detail string
+	var body, detail string
 	if t.focusModels {
 		active = 1
 		t.modelTable.Focus()
 		t.presetTable.Blur()
-		panel = ui.PanelStyle(ui.Green, true).Width(width).Height(tableH).Render(t.modelPane(snapshot))
+		body = t.modelPane(snapshot)
 		detail = localModelDetail(width, detailH, ui.Green, t.selectedModel(models))
 	} else {
 		t.presetTable.Focus()
 		t.modelTable.Blur()
-		panel = ui.PanelStyle(ui.Cyan, true).Width(width).Height(tableH).Render(t.presetPane(snapshot))
+		body = t.presetPane(snapshot)
 		detail = presetDetail(width, detailH, ui.Cyan, t.selectedPreset(presets), snapshot.runtime)
 	}
 
-	strip := ui.TabStrip(
-		[]string{fmt.Sprintf("Presets (%d)", len(presets)), fmt.Sprintf("Local models (%d)", len(models))},
-		[]color.Color{ui.Cyan, ui.Green},
-		active,
-	)
-	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, strip, panel, detail, "", modelHelp(t.keys)), 0, height)
+	tabbed := ui.TabbedPanel(titles, accents, active, width, tabbedH, body)
+	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, tabbed, detail, "", modelHelp(t.keys)), 0, height)
 }
 
 func (t *ModelsTab) presetPane(snapshot dashboardSnapshot) string {

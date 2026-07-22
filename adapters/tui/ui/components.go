@@ -30,6 +30,12 @@ func TabStrip(titles []string, accents []color.Color, active int) string {
 	return theme.TabStrip(titles, accents, active)
 }
 
+// TabbedPanel renders the tab row joined seamlessly to a content panel (the
+// active tab opens into it, no dividing line), both in the active accent.
+func TabbedPanel(titles []string, accents []color.Color, active, width, height int, body string) string {
+	return theme.TabbedPanel(titles, accents, active, width, height, body)
+}
+
 func StatusTitle(title, status string, titleColor, statusColor color.Color, width int) string {
 	return theme.StatusTitle(title, status, titleColor, statusColor, width)
 }
