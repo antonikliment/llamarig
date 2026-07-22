@@ -160,7 +160,7 @@ var logPaneMeta = [paneCount]struct {
 }
 
 func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
-	const stripHeight, helpHeight = 1, 3
+	const stripHeight, helpHeight = 2, 3
 	paneHeight := max(3, height-stripHeight-helpHeight)
 
 	lines := [paneCount][]string{

@@ -200,7 +200,7 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	t.setRows(snapshot)
 	presets, models := snapshot.presets, snapshot.localModels
 
-	const stripHeight, helpHeight = 1, 2
+	const stripHeight, helpHeight = 2, 2
 	detailH := max(3, height/3)
 	tableH := max(3, height-stripHeight-detailH-helpHeight)
 

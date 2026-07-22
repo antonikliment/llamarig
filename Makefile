@@ -25,7 +25,7 @@ lint-ci: generate custom-golangci-lint
 	$(CUSTOM_LINT) run
 
 analyze:
-	go tool sizeanalyzer
+	go tool sizeanalyzer -html size-report2.html
 
 verify: test lint
 

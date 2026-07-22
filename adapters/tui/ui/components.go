@@ -1,50 +1,46 @@
 package ui
 
 import (
-	"fmt"
 	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/antonikliment/tuikit"
 )
 
-func PanelStyle(color color.Color, focused bool) lipgloss.Style {
-	style := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(color).Padding(0, 1)
-	if focused {
-		return style.Border(lipgloss.DoubleBorder()).BorderForeground(Yellow)
-	}
-	return style
+// theme mirrors the ui palette so the shared tuikit components render with
+// llamarig's colors.
+var theme = tuikit.Theme{
+	Green:       Green,
+	Blue:        Blue,
+	Yellow:      Yellow,
+	Red:         Red,
+	Cyan:        Cyan,
+	Muted:       Muted,
+	Brand:       lipgloss.Color("63"),
+	TabActiveFg: lipgloss.Color("0"),
+	FocusBorder: Yellow,
 }
 
-var inactiveTabChip = lipgloss.NewStyle().Foreground(Muted).Padding(0, 1)
+func PanelStyle(c color.Color, focused bool) lipgloss.Style { return theme.PanelStyle(c, focused) }
 
-func activeTabChip(accent color.Color) lipgloss.Style {
-	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
-}
-
-// TabStrip renders labelled tab chips, highlighting the active one as a filled
-// accent chip and the rest as muted labels. Titles are pre-formatted by the
-// caller (e.g. with counts). len(titles) must equal len(accents).
+// TabStrip renders labelled tabs; the active one is a folder tab in its accent
+// color. Titles are pre-formatted by the caller (e.g. with counts).
 func TabStrip(titles []string, accents []color.Color, active int) string {
-	chips := make([]string, len(titles))
-	for i, title := range titles {
-		if i == active {
-			chips[i] = activeTabChip(accents[i]).Render(title)
-		} else {
-			chips[i] = inactiveTabChip.Render(title)
-		}
-	}
-	return strings.Join(chips, " ")
+	return theme.TabStrip(titles, accents, active)
 }
 
 func StatusTitle(title, status string, titleColor, statusColor color.Color, width int) string {
-	left := lipgloss.NewStyle().Foreground(titleColor).Bold(true).Render(title)
-	right := lipgloss.NewStyle().Foreground(statusColor).Render("● " + status)
-	space := max(1, max(0, width-8)-lipgloss.Width(left)-lipgloss.Width(right))
-	return left + strings.Repeat(" ", space) + right
+	return theme.StatusTitle(title, status, titleColor, statusColor, width)
 }
 
-func Field(label, value string) string { return fmt.Sprintf("%-9s %s", label+":", value) }
+func Field(label, value string) string { return tuikit.Field(label, value) }
+
+func Rule(width int) string { return theme.Rule(width) }
+
+func VerticalSlice(content string, offset, height int) string {
+	return tuikit.VerticalSlice(content, offset, height)
+}
 
 func ActionRow(foreground color.Color, selected int, labels []string, focused bool) string {
 	if !focused {
@@ -59,15 +55,4 @@ func ActionRow(foreground color.Color, selected int, labels []string, focused bo
 		}
 	}
 	return strings.Join(parts, "  ")
-}
-
-func Rule(width int) string { return MutedStyle.Render(strings.Repeat("─", max(0, width-6))) }
-
-func VerticalSlice(content string, offset, height int) string {
-	lines := strings.Split(content, "\n")
-	if height <= 0 || len(lines) <= height {
-		return content
-	}
-	offset = min(max(0, offset), len(lines)-height)
-	return strings.Join(lines[offset:offset+height], "\n")
 }
