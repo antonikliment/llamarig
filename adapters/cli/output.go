@@ -20,12 +20,12 @@ func (c command) printJSON(value any) error {
 
 func (c command) printInfo(v *controlv1.RuntimeInfo) error {
 	_, err := fmt.Fprintf(c.out, "status: %s\ndefault: %s\npresets: %d\nautostart: %s\n",
-		v.GetRouter().GetStatus(), dash(v.GetDefaultPreset()), v.GetPresetsCount(), list(v.GetAutostartPresets()))
+		v.GetRouter().GetStatus(), cmp.Or(v.GetDefaultPreset(), "-"), v.GetPresetsCount(), list(v.GetAutostartPresets()))
 	return err
 }
 
 func (c command) printStatus(v *controlv1.RuntimeStatus) error {
-	_, err := fmt.Fprintf(c.out, "status: %s\ndetail: %s\n", v.GetState(), dash(v.GetDetail()))
+	_, err := fmt.Fprintf(c.out, "status: %s\ndetail: %s\n", v.GetState(), cmp.Or(v.GetDetail(), "-"))
 	return err
 }
 

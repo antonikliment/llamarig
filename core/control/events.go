@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -54,10 +55,8 @@ func (s *EventStore) Record(_ context.Context, event AuditEvent) {
 func (s *EventStore) List() []Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]Event, len(s.events))
-	for i, event := range s.events {
-		out[len(s.events)-1-i] = event
-	}
+	out := slices.Clone(s.events)
+	slices.Reverse(out)
 	return out
 }
 

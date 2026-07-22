@@ -80,43 +80,27 @@ func (b dashboardBackend) poll() tea.Cmd {
 		var presets fetchResult[[]presetView]
 		var localModels fetchResult[[]*controlv1.LocalModel]
 		group, groupCtx := errgroup.WithContext(ctx)
-		group.Go(func() error {
+		goFetch(group, &runtime, func() (*controlv1.RuntimeStatus, error) {
 			out, err := b.client.GetRuntimeStatus(groupCtx, &controlv1.GetRuntimeStatusRequest{})
-			runtime = fetched(out.GetStatus(), err)
-			return nil
+			return out.GetStatus(), err
 		})
-		group.Go(func() error {
+		goFetch(group, &resources, func() (*controlv1.SignalsSnapshot, error) {
 			out, err := b.client.GetSignals(groupCtx, &controlv1.GetSignalsRequest{})
-			resources = fetched(out.GetSignals(), err)
-			return nil
+			return out.GetSignals(), err
 		})
-		group.Go(func() error {
+		goFetch(group, &presets, func() ([]presetView, error) {
 			out, err := b.client.ListPresets(groupCtx, &controlv1.ListPresetsRequest{})
-			presets = fetched(presetsToViews(out.GetPresets()), err)
-			return nil
+			return presetsToViews(out.GetPresets()), err
 		})
-		group.Go(func() error {
+		goFetch(group, &localModels, func() ([]*controlv1.LocalModel, error) {
 			out, err := b.client.ListLocalModels(groupCtx, &controlv1.ListLocalModelsRequest{})
-			localModels = fetched(out.GetModels(), err)
-			return nil
+			return out.GetModels(), err
 		})
 		_ = group.Wait()
-		if runtime.err == nil {
-			result.snapshot.runtime, result.runtimeOK = runtime.value, true
-		}
-		if resources.err == nil {
-			result.snapshot.resources, result.resourcesOK = resources.value, true
-		}
-		if presets.err == nil {
-			result.snapshot.presets, result.presetsOK = presets.value, true
-		}
-		if localModels.err == nil {
-			result.snapshot.localModels, result.localModelsOK = localModels.value, true
-		}
-		addWarning(result.snapshot.warnings, "runtime", runtime.err)
-		addWarning(result.snapshot.warnings, "resources", resources.err)
-		addWarning(result.snapshot.warnings, "presets", presets.err)
-		addWarning(result.snapshot.warnings, "models", localModels.err)
+		applyFetch(runtime, &result.snapshot.runtime, &result.runtimeOK, result.snapshot.warnings, "runtime")
+		applyFetch(resources, &result.snapshot.resources, &result.resourcesOK, result.snapshot.warnings, "resources")
+		applyFetch(presets, &result.snapshot.presets, &result.presetsOK, result.snapshot.warnings, "presets")
+		applyFetch(localModels, &result.snapshot.localModels, &result.localModelsOK, result.snapshot.warnings, "models")
 		return result
 	}
 }
@@ -148,6 +132,20 @@ func presetsToViews(presets []*controlv1.ModelPreset) []presetView {
 		out = append(out, view)
 	}
 	return out
+}
+
+// goFetch registers a fetch goroutine on g that stores its typed result into dst.
+func goFetch[T any](g *errgroup.Group, dst *fetchResult[T], call func() (T, error)) {
+	g.Go(func() error { *dst = fetched(call()); return nil })
+}
+
+// applyFetch applies a successful fetch to the snapshot field and ok flag, and
+// records any error as a warning under key.
+func applyFetch[T any](r fetchResult[T], field *T, ok *bool, warnings map[string]string, key string) {
+	if r.err == nil {
+		*field, *ok = r.value, true
+	}
+	addWarning(warnings, key, r.err)
 }
 
 // fetched wraps an RPC's extracted value and error into a fetchResult.

@@ -305,12 +305,17 @@ func (t *ModelsTab) pendingDeleteWarning(models []*controlv1.LocalModel) string 
 	return ""
 }
 
+// emptyDetail renders the placeholder panel shown when no row is selected.
+func emptyDetail(width, height int, accent color.Color, msg string) string {
+	return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render(msg))
+}
+
 // presetDetail fills the space below the list with the selected preset so
 // the tab is no longer mostly empty, surfacing the full model path and the
 // action that applies to its current state.
 func presetDetail(width, height int, accent color.Color, preset *presetView, runtime *controlv1.RuntimeStatus) string {
 	if preset == nil {
-		return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a preset to see details"))
+		return emptyDetail(width, height, accent, "Select a preset to see details")
 	}
 	state, stateColor, action := "Stopped", ui.Muted, ui.GreenStyle.Render("Enter: start preset")
 	if presetUnavailable(preset) {
@@ -336,7 +341,7 @@ func presetDetail(width, height int, accent color.Color, preset *presetView, run
 
 func localModelDetail(width, height int, accent color.Color, model *controlv1.LocalModel) string {
 	if model == nil {
-		return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a local model to see details"))
+		return emptyDetail(width, height, accent, "Select a local model to see details")
 	}
 	usedBy, stateColor := "-", ui.Muted
 	if len(model.GetUsedByPresets()) > 0 {

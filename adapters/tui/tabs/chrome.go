@@ -19,16 +19,18 @@ type ChromeProps struct {
 
 func RenderHeader(props ChromeProps) string {
 	title := ui.BrandStyle.Render(config.ProjectDisplayName) + ui.MutedStyle.Render("  Local AI control service")
-	tabLabels := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		tabLabel(props.ActiveTab, TabServices, "1", "Services"),
-		"    ",
-		tabLabel(props.ActiveTab, TabModels, "2", "Models"),
-		"    ",
-		tabLabel(props.ActiveTab, TabSystem, "3", "System"),
-		"    ",
-		tabLabel(props.ActiveTab, TabLogs, "4", "Logs"),
-	)
+	labels := []struct {
+		tab        Tab
+		key, label string
+	}{
+		{TabServices, "1", "Services"}, {TabModels, "2", "Models"},
+		{TabSystem, "3", "System"}, {TabLogs, "4", "Logs"},
+	}
+	parts := make([]string, 0, len(labels))
+	for _, l := range labels {
+		parts = append(parts, tabLabel(props.ActiveTab, l.tab, l.key, l.label))
+	}
+	tabLabels := lipgloss.JoinHorizontal(lipgloss.Top, strings.Join(parts, "    "))
 	help := ui.MutedStyle.Render("Ctrl+C Quit")
 	middleWidth := max(1, props.Width-lipgloss.Width(title)-lipgloss.Width(help))
 	line := title + lipgloss.PlaceHorizontal(middleWidth, lipgloss.Center, tabLabels) + help
