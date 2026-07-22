@@ -16,6 +16,27 @@ func PanelStyle(color color.Color, focused bool) lipgloss.Style {
 	return style
 }
 
+var inactiveTabChip = lipgloss.NewStyle().Foreground(Muted).Padding(0, 1)
+
+func activeTabChip(accent color.Color) lipgloss.Style {
+	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
+}
+
+// TabStrip renders labelled tab chips, highlighting the active one as a filled
+// accent chip and the rest as muted labels. Titles are pre-formatted by the
+// caller (e.g. with counts). len(titles) must equal len(accents).
+func TabStrip(titles []string, accents []color.Color, active int) string {
+	chips := make([]string, len(titles))
+	for i, title := range titles {
+		if i == active {
+			chips[i] = activeTabChip(accents[i]).Render(title)
+		} else {
+			chips[i] = inactiveTabChip.Render(title)
+		}
+	}
+	return strings.Join(chips, " ")
+}
+
 func StatusTitle(title, status string, titleColor, statusColor color.Color, width int) string {
 	left := lipgloss.NewStyle().Foreground(titleColor).Bold(true).Render(title)
 	right := lipgloss.NewStyle().Foreground(statusColor).Render("● " + status)

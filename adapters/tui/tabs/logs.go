@@ -174,26 +174,17 @@ func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
 
-var inactiveLogTabStyle = lipgloss.NewStyle().Foreground(ui.Muted).Padding(0, 1)
-
-func activeLogTabStyle(accent color.Color) lipgloss.Style {
-	return lipgloss.NewStyle().Background(accent).Foreground(lipgloss.Color("0")).Bold(true).Padding(0, 1)
-}
-
 // tabStrip renders both logs as labelled tabs (with line counts) so it is clear
 // there are two, highlighting the active one as a filled chip; the inactive log
 // is minimized to just its tab label.
 func (t *LogsTab) tabStrip(lines [paneCount][]string) string {
-	chips := make([]string, 0, paneCount)
+	titles := make([]string, paneCount)
+	accents := make([]color.Color, paneCount)
 	for pane := logPane(0); pane < paneCount; pane++ {
-		text := fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
-		if t.focus == pane {
-			chips = append(chips, activeLogTabStyle(logPaneMeta[pane].accent).Render(text))
-		} else {
-			chips = append(chips, inactiveLogTabStyle.Render(text))
-		}
+		titles[pane] = fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
+		accents[pane] = logPaneMeta[pane].accent
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, chips[paneDaemon], " ", chips[paneLlama])
+	return ui.TabStrip(titles, accents, int(t.focus))
 }
 
 func (t *LogsTab) renderLogPane(pane logPane, accent color.Color, width, height int, lines []string) string {
