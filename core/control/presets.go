@@ -22,37 +22,31 @@ func (m *Manager) PresetsRoot() string {
 	return m.presets.Root()
 }
 
-func (m *Manager) ListPresets(ctx context.Context) ([]modelpresets.Section, error) {
+// presetRead runs a read against the preset store, guarding that the store is
+// configured and mapping store errors to core errors, so the read accessors
+// stay one line each.
+func presetRead[T any](m *Manager, read func() (T, error)) (T, error) {
+	var zero T
 	if err := m.requirePresets(); err != nil {
-		return nil, err
+		return zero, err
 	}
-	sections, err := m.presets.List(ctx)
+	value, err := read()
 	if err != nil {
-		return nil, mapServerConfigError(err)
+		return zero, mapServerConfigError(err)
 	}
-	return sections, nil
+	return value, nil
+}
+
+func (m *Manager) ListPresets(ctx context.Context) ([]modelpresets.Section, error) {
+	return presetRead(m, func() ([]modelpresets.Section, error) { return m.presets.List(ctx) })
 }
 
 func (m *Manager) GlobalPreset(ctx context.Context) (modelpresets.Section, error) {
-	if err := m.requirePresets(); err != nil {
-		return modelpresets.Section{}, err
-	}
-	section, err := m.presets.Global(ctx)
-	if err != nil {
-		return modelpresets.Section{}, mapServerConfigError(err)
-	}
-	return section, nil
+	return presetRead(m, func() (modelpresets.Section, error) { return m.presets.Global(ctx) })
 }
 
 func (m *Manager) GetPreset(ctx context.Context, name string) (modelpresets.Section, error) {
-	if err := m.requirePresets(); err != nil {
-		return modelpresets.Section{}, err
-	}
-	section, err := m.presets.Get(ctx, name)
-	if err != nil {
-		return modelpresets.Section{}, mapServerConfigError(err)
-	}
-	return section, nil
+	return presetRead(m, func() (modelpresets.Section, error) { return m.presets.Get(ctx, name) })
 }
 
 func (m *Manager) PutPreset(ctx context.Context, section modelpresets.Section, createOnly bool) (modelpresets.Section, error) {
