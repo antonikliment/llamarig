@@ -288,7 +288,12 @@ func modelMetadata(info modelInfo) (int64, string, int64, bool) {
 		arch := strings.TrimSpace(info.GGUF.Architecture)
 		return info.GGUF.Total, arch, info.GGUF.ContextLength, isMoE(arch, info.Config.NumExpertsPerTok)
 	}
-	arch := firstNonEmpty(append(info.Config.Architectures, info.Config.ModelType)...)
+	candidates := make([]string, 0, len(info.Config.Architectures)+1)
+	for _, v := range info.Config.Architectures {
+		candidates = append(candidates, strings.TrimSpace(v))
+	}
+	candidates = append(candidates, strings.TrimSpace(info.Config.ModelType))
+	arch := cmp.Or(candidates...)
 	return info.Safetensors.Total, arch, 0, isMoE(arch, info.Config.NumExpertsPerTok)
 }
 
@@ -627,15 +632,6 @@ func licenseFromTags(tags []string) string {
 	for _, tag := range tags {
 		if strings.HasPrefix(tag, "license:") {
 			return strings.TrimPrefix(tag, "license:")
-		}
-	}
-	return ""
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
 		}
 	}
 	return ""
