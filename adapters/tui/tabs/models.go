@@ -2,6 +2,7 @@ package tabs
 
 import (
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"strings"
 
@@ -86,7 +87,7 @@ func (t *ModelsTab) Update(msg tea.Msg, snapshot dashboardSnapshot) tea.Cmd {
 	} else if len(presets) == 0 {
 		t.focusModels = true
 	}
-	if key.String() == "tab" && len(models) > 0 && len(presets) > 0 {
+	if bindkey.Matches(key, t.keys.NextPanel) || bindkey.Matches(key, t.keys.PreviousPanel) {
 		t.focusModels, t.pendingDeletePath = !t.focusModels, ""
 		return nil
 	}
@@ -198,9 +199,10 @@ func (t *ModelsTab) deleteSelected(model *controlv1.LocalModel, confirm bool) te
 func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	t.setRows(snapshot)
 	presets, models := snapshot.presets, snapshot.localModels
-	presetH := max(5, height/3)
-	modelH := max(5, height/3)
-	detailH := max(3, height-presetH-modelH-2)
+
+	const stripHeight, helpHeight = 1, 2
+	detailH := max(3, height/3)
+	tableH := max(3, height-stripHeight-detailH-helpHeight)
 
 	if t.focusModels {
 		t.modelTable.Focus()
@@ -210,19 +212,35 @@ func (t *ModelsTab) View(width, height int, snapshot dashboardSnapshot) string {
 		t.modelTable.Blur()
 	}
 	t.presetTable.SetWidth(width - 2)
-	t.presetTable.SetHeight(max(1, presetH-2))
+	t.presetTable.SetHeight(max(1, tableH-2))
 	t.modelTable.SetWidth(width - 2)
-	t.modelTable.SetHeight(max(1, modelH-2))
+	t.modelTable.SetHeight(max(1, tableH-2))
 
-	presetList := ui.PanelStyle(ui.Cyan, !t.focusModels).Width(width).Height(presetH).Render(t.presetPane(snapshot))
-	modelList := ui.PanelStyle(ui.Cyan, t.focusModels).Width(width).Height(modelH).Render(t.modelPane(snapshot))
-	var detail string
+	strip := ui.TabStrip(
+		[]string{
+			fmt.Sprintf("Presets (%d)", len(presets)),
+			fmt.Sprintf("Local models (%d)", len(models)),
+		},
+		[]color.Color{ui.Cyan, ui.Green},
+		boolToInt(t.focusModels),
+	)
+
+	var panel, detail string
 	if t.focusModels {
-		detail = localModelDetail(width, detailH, t.selectedModel(models))
+		panel = ui.PanelStyle(ui.Green, true).Width(width).Height(tableH).Render(t.modelPane(snapshot))
+		detail = localModelDetail(width, detailH, ui.Green, t.selectedModel(models))
 	} else {
-		detail = presetDetail(width, detailH, t.selectedPreset(presets), snapshot.runtime)
+		panel = ui.PanelStyle(ui.Cyan, true).Width(width).Height(tableH).Render(t.presetPane(snapshot))
+		detail = presetDetail(width, detailH, ui.Cyan, t.selectedPreset(presets), snapshot.runtime)
 	}
-	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, presetList, modelList, detail, "", modelHelp(t.keys)), 0, height)
+	return ui.VerticalSlice(lipgloss.JoinVertical(lipgloss.Left, strip, panel, detail, "", modelHelp(t.keys)), 0, height)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (t *ModelsTab) presetPane(snapshot dashboardSnapshot) string {
@@ -301,9 +319,9 @@ func (t *ModelsTab) pendingDeleteWarning(models []*controlv1.LocalModel) string 
 // presetDetail fills the space below the list with the selected preset so
 // the tab is no longer mostly empty, surfacing the full model path and the
 // action that applies to its current state.
-func presetDetail(width, height int, preset *presetView, runtime *controlv1.RuntimeStatus) string {
+func presetDetail(width, height int, accent color.Color, preset *presetView, runtime *controlv1.RuntimeStatus) string {
 	if preset == nil {
-		return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a preset to see details"))
+		return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a preset to see details"))
 	}
 	state, stateColor, action := "Stopped", ui.Muted, ui.GreenStyle.Render("Enter: start preset")
 	if presetUnavailable(preset) {
@@ -312,7 +330,7 @@ func presetDetail(width, height int, preset *presetView, runtime *controlv1.Runt
 		state, stateColor, action = "Running", ui.Green, ui.MutedStyle.Render("Running · stop from the Services tab")
 	}
 	rows := []string{
-		ui.StatusTitle(preset.Name, state, ui.Cyan, stateColor, width),
+		ui.StatusTitle(preset.Name, state, accent, stateColor, width),
 		ui.Field("Model", presetModel(preset)),
 		ui.Field("Path", truncMiddle(preset.Model, width-12)),
 	}
@@ -324,26 +342,26 @@ func presetDetail(width, height int, preset *presetView, runtime *controlv1.Runt
 	} else if height >= 7 {
 		rows = append(rows, action)
 	}
-	return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	return ui.PanelStyle(accent, false).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
-func localModelDetail(width, height int, model *controlv1.LocalModel) string {
+func localModelDetail(width, height int, accent color.Color, model *controlv1.LocalModel) string {
 	if model == nil {
-		return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a local model to see details"))
+		return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render("Select a local model to see details"))
 	}
 	usedBy, stateColor := "-", ui.Muted
 	if len(model.GetUsedByPresets()) > 0 {
 		usedBy, stateColor = strings.Join(model.GetUsedByPresets(), ", "), ui.Yellow
 	}
 	rows := []string{
-		ui.StatusTitle(model.GetFilename(), formatBytes(model.GetSizeBytes()), ui.Cyan, stateColor, width),
+		ui.StatusTitle(model.GetFilename(), formatBytes(model.GetSizeBytes()), accent, stateColor, width),
 		ui.Field("Path", truncMiddle(model.GetPath(), width-12)),
 		ui.Field("Used by", truncMiddle(usedBy, width-12)),
 	}
 	if height >= 7 {
 		rows = append(rows, ui.Rule(width), ui.MutedStyle.Render("d: delete model"))
 	}
-	return ui.PanelStyle(ui.Cyan, false).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	return ui.PanelStyle(accent, false).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
 func presetUnavailable(preset *presetView) bool {
