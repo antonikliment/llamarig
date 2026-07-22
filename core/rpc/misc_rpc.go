@@ -240,18 +240,14 @@ func mapProto[I any, O any](items []I, fn func(I) *O) []*O {
 	return out
 }
 
+var modelErrorTable = []control.SentinelKind{
+	{Target: modelcatalog.ErrInvalidInput, Kind: control.ErrorInvalidInput},
+	{Target: modeldownload.ErrInvalidInput, Kind: control.ErrorInvalidInput},
+	{Target: modelcatalog.ErrNotFound, Kind: control.ErrorNotFound},
+	{Target: modeldownload.ErrNotFound, Kind: control.ErrorNotFound},
+	{Target: modeldownload.ErrConflict, Kind: control.ErrorConflict},
+}
+
 func mapModelError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, modelcatalog.ErrInvalidInput) || errors.Is(err, modeldownload.ErrInvalidInput) {
-		return control.CoreError(control.ErrorInvalidInput, err.Error(), err)
-	}
-	if errors.Is(err, modelcatalog.ErrNotFound) || errors.Is(err, modeldownload.ErrNotFound) {
-		return control.CoreError(control.ErrorNotFound, err.Error(), err)
-	}
-	if errors.Is(err, modeldownload.ErrConflict) {
-		return control.CoreError(control.ErrorConflict, err.Error(), err)
-	}
-	return err
+	return control.MapSentinel(err, modelErrorTable)
 }

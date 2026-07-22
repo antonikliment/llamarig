@@ -84,32 +84,54 @@ func mapRuntimeError(err error, fallback string) error {
 	}
 }
 
-func mapServerConfigError(err error) error {
+// SentinelKind pairs a sentinel error with the ErrorKind it maps to.
+type SentinelKind struct {
+	Target error
+	Kind   ErrorKind
+}
+
+// MapSentinel returns a CoreError for the first table entry whose Target
+// matches err (via errors.Is), preserving err.Error() as the message. If no
+// entry matches, err is returned unchanged.
+func MapSentinel(err error, table []SentinelKind) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, modelpresets.ErrInvalid) {
-		return CoreError(ErrorInvalidInput, err.Error(), err)
-	}
-	if errors.Is(err, modelpresets.ErrNotFound) {
-		return CoreError(ErrorNotFound, err.Error(), err)
-	}
-	if errors.Is(err, modelpresets.ErrExists) {
-		return CoreError(ErrorConflict, err.Error(), err)
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return CoreError(ErrorNotFound, err.Error(), err)
-	}
-	if errors.Is(err, errors.ErrUnsupported) {
-		return CoreError(ErrorInvalidInput, err.Error(), err)
+	for _, e := range table {
+		if errors.Is(err, e.Target) {
+			return CoreError(e.Kind, err.Error(), err)
+		}
 	}
 	return err
+}
+
+var serverConfigErrorTable = []SentinelKind{
+	{modelpresets.ErrInvalid, ErrorInvalidInput},
+	{modelpresets.ErrNotFound, ErrorNotFound},
+	{modelpresets.ErrExists, ErrorConflict},
+	{os.ErrNotExist, ErrorNotFound},
+	{errors.ErrUnsupported, ErrorInvalidInput},
+}
+
+func mapServerConfigError(err error) error {
+	return MapSentinel(err, serverConfigErrorTable)
+}
+
+var configStoreErrorTable = []SentinelKind{
+	{config.ErrAutostartCapExceeded, ErrorConflict},
+	{configstore.ErrEmpty, ErrorInvalidInput},
+	{configstore.ErrTooLarge, ErrorInvalidInput},
+	{configstore.ErrMalformed, ErrorInvalidInput},
+	{errors.ErrUnsupported, ErrorInvalidInput},
 }
 
 func mapConfigStoreError(err error) error {
 	if err == nil {
 		return nil
 	}
+	// os.ErrNotExist uses a custom message, so handle it before the table.
+	// It must be checked after the autostart/store sentinels to preserve
+	// the original precedence.
 	if errors.Is(err, config.ErrAutostartCapExceeded) {
 		return CoreError(ErrorConflict, err.Error(), err)
 	}
@@ -119,10 +141,7 @@ func mapConfigStoreError(err error) error {
 	if errors.Is(err, os.ErrNotExist) {
 		return CoreError(ErrorNotFound, "config.yaml entry not found", err)
 	}
-	if errors.Is(err, errors.ErrUnsupported) {
-		return CoreError(ErrorInvalidInput, err.Error(), err)
-	}
-	return err
+	return MapSentinel(err, configStoreErrorTable)
 }
 
 func MessageOr(fallback string, err error) string {
