@@ -181,25 +181,33 @@ func modelDownloadProto(job modeldownload.Job) *controlv1.ModelDownload {
 	}
 }
 
+// errorKindCodes is the single source of truth pairing control error kinds
+// with their connect wire codes, used in both directions by rpcError and
+// ErrorKindFromRPC. An unlisted kind maps to CodeUnknown; an unlisted code
+// maps back to ErrorRuntime.
+var errorKindCodes = []struct {
+	kind control.ErrorKind
+	code connect.Code
+}{
+	{control.ErrorInvalidInput, connect.CodeInvalidArgument},
+	{control.ErrorPermission, connect.CodePermissionDenied},
+	{control.ErrorNotFound, connect.CodeNotFound},
+	{control.ErrorConflict, connect.CodeFailedPrecondition},
+	{control.ErrorTimeout, connect.CodeDeadlineExceeded},
+	{control.ErrorRuntime, connect.CodeInternal},
+}
+
 func rpcError(err error) error {
 	if err == nil {
 		return nil
 	}
 	kind := control.Kind(err)
 	code := connect.CodeUnknown
-	switch kind {
-	case control.ErrorInvalidInput:
-		code = connect.CodeInvalidArgument
-	case control.ErrorPermission:
-		code = connect.CodePermissionDenied
-	case control.ErrorNotFound:
-		code = connect.CodeNotFound
-	case control.ErrorConflict:
-		code = connect.CodeFailedPrecondition
-	case control.ErrorTimeout:
-		code = connect.CodeDeadlineExceeded
-	case control.ErrorRuntime:
-		code = connect.CodeInternal
+	for _, m := range errorKindCodes {
+		if m.kind == kind {
+			code = m.code
+			break
+		}
 	}
 	connectErr := connect.NewError(code, err)
 	if kind != "" {
@@ -216,20 +224,12 @@ func ErrorKindFromRPC(err error) control.ErrorKind {
 	if kind := connectErr.Meta().Get(errorKindHeader); kind != "" {
 		return control.ErrorKind(kind)
 	}
-	switch connectErr.Code() {
-	case connect.CodeInvalidArgument:
-		return control.ErrorInvalidInput
-	case connect.CodePermissionDenied:
-		return control.ErrorPermission
-	case connect.CodeNotFound:
-		return control.ErrorNotFound
-	case connect.CodeFailedPrecondition:
-		return control.ErrorConflict
-	case connect.CodeDeadlineExceeded:
-		return control.ErrorTimeout
-	default:
-		return control.ErrorRuntime
+	for _, m := range errorKindCodes {
+		if m.code == connectErr.Code() {
+			return m.kind
+		}
 	}
+	return control.ErrorRuntime
 }
 
 func mapProto[I any, O any](items []I, fn func(I) *O) []*O {
