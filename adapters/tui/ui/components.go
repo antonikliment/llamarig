@@ -2,7 +2,6 @@ package ui
 
 import (
 	"image/color"
-	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/antonikliment/tuikit"
@@ -53,16 +52,5 @@ func VerticalSlice(content string, offset, height int) string {
 }
 
 func ActionRow(foreground color.Color, selected int, labels []string, focused bool) string {
-	if !focused {
-		return MutedStyle.Render("Actions:  " + strings.Join(labels, "  "))
-	}
-	parts := []string{lipgloss.NewStyle().Foreground(foreground).Render("Actions:")}
-	for index, label := range labels {
-		if index == selected {
-			parts = append(parts, ActiveTabStyle.Render("["+label+"]"))
-		} else {
-			parts = append(parts, MutedStyle.Render(label))
-		}
-	}
-	return strings.Join(parts, "  ")
+	return theme.ActionRow(foreground, selected, labels, focused)
 }
