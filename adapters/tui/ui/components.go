@@ -23,6 +23,15 @@ var theme = tuikit.Theme{
 
 func PanelStyle(c color.Color, focused bool) lipgloss.Style { return theme.PanelStyle(c, focused) }
 
+// Theme exposes the shared tuikit palette so tabs can pass it to tuikit
+// components (e.g. Status.AppendRows) that render in the app's colors.
+func Theme() tuikit.Theme { return theme }
+
+// EmptyDetail renders a muted "nothing selected" placeholder inside a panel.
+func EmptyDetail(accent color.Color, width, height int, msg string) string {
+	return theme.EmptyPanel(accent, width, height, msg)
+}
+
 // TabStrip renders labelled tabs; the active one is a folder tab in its accent
 // color. Titles are pre-formatted by the caller (e.g. with counts).
 func TabStrip(titles []string, accents []color.Color, active int) string {

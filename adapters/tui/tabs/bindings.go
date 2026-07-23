@@ -5,13 +5,9 @@ import (
 	"github.com/antonikliment/tuikit"
 )
 
-// helpModel renders keybinding help lines (bubbles/help) shared across tabs,
-// using tuikit's brightened key/description styles so the footer stays legible
-// against the dim bubbles defaults.
+// helpModel renders multi-column keybinding help (bubbles/help) with tuikit's
+// brightened styles. Single-line short help goes through tuikit.HelpLine.
 var helpModel = tuikit.Help()
-
-// helpLine renders the given bindings as a single "key desc • key desc" line.
-func helpLine(bindings ...key.Binding) string { return helpModel.ShortHelpView(bindings) }
 
 type KeyMap struct {
 	NextPanel       key.Binding
