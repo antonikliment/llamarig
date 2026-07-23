@@ -178,7 +178,7 @@ var (
 )
 
 func logsHelp(width int, t *LogsTab) string {
-	status := helpLine(logSwitchKey, logScrollKey, logSearchKey, logClearKey, logTabKey)
+	status := tuikit.HelpLine(logSwitchKey, logScrollKey, logSearchKey, logClearKey, logTabKey)
 	view := &t.view[t.focus]
 	if view.Searching() {
 		status = ui.MutedStyle.Render("Search: " + view.InputView() + "  (Enter/Esc to finish)")

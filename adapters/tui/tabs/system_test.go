@@ -38,7 +38,7 @@ func TestSystemResourcesPanelRendersRPCWarningsWhenGPUUnavailable(t *testing.T) 
 
 func TestResourceMeterClampsPercent(t *testing.T) {
 	for _, percent := range []int{-1, 101} {
-		if got := resourceMeter(percent); got == "" {
+		if got := resourceMeter.View(percent); got == "" {
 			t.Fatalf("meter for %d is empty", percent)
 		}
 	}

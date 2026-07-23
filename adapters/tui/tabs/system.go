@@ -6,10 +6,10 @@ import (
 	"math"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/antonikliment/tuikit"
 	controlv1 "llamarig/core/rpc/gen/v1"
 )
 
@@ -66,7 +66,7 @@ func systemResourcesDetailPanel(width int, height int, resources *controlv1.Sign
 func resourceRow(label string, percent float64, detail string) string {
 	rounded := int(math.Round(percent))
 	// Pad to fit the longest label ("Models:") so every meter starts in the same column.
-	row := fmt.Sprintf("%-8s %s %3d%%", label+":", resourceMeter(rounded), rounded)
+	row := fmt.Sprintf("%-8s %s %3d%%", label+":", resourceMeter.View(rounded), rounded)
 	if detail != "" {
 		row += "  " + ui.MutedStyle.Render(detail)
 	}
@@ -74,17 +74,13 @@ func resourceRow(label string, percent float64, detail string) string {
 	return row
 }
 
-var meter = progress.New(progress.WithWidth(20), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage(), progress.WithColors(ui.Green))
-
-func resourceMeter(percent int) string {
-	return meter.ViewAs(float64(max(0, min(100, percent))) / 100)
-}
+var resourceMeter = tuikit.NewMeter(20, ui.Green)
 
 func bytePair(used uint64, total uint64) string {
 	if total == 0 {
 		return ""
 	}
-	return fmt.Sprintf("(%s/%s)", formatBytes(int64(used)), formatBytes(int64(total)))
+	return fmt.Sprintf("(%s/%s)", tuikit.FormatBytes(int64(used)), tuikit.FormatBytes(int64(total)))
 }
 
 func gpuRow(resources *controlv1.SignalsSnapshot) string {

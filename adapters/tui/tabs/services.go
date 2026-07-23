@@ -15,6 +15,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/antonikliment/tuikit"
 )
 
 type servicePanel int
@@ -180,8 +181,8 @@ func renderDaemon(width, height int, snapshot dashboardSnapshot, selected int, f
 	}
 	return renderServicePanel(width, height, "Core Daemon", ui.Green, state, stateColor,
 		[]string{fmt.Sprintf("%-8s %s", "PID:", pid), fmt.Sprintf("%-8s %s", "Uptime:", uptime),
-			fmt.Sprintf("%-8s %s", "Config:", truncMiddle(snapshot.configPath, width-14)),
-			fmt.Sprintf("%-8s %s", "Log:", truncMiddle(snapshot.logPath, width-14))},
+			fmt.Sprintf("%-8s %s", "Config:", tuikit.TruncMiddle(snapshot.configPath, width-14)),
+			fmt.Sprintf("%-8s %s", "Log:", tuikit.TruncMiddle(snapshot.logPath, width-14))},
 		[]string{"Start", "Stop", "Status"}, selected, focused, stopping, message, actionErr)
 }
 
@@ -208,7 +209,11 @@ func renderHTTP(width, height int, snapshot dashboardSnapshot, selected int, foc
 }
 
 func renderActionPanel(content []string, width, height int, focused bool, message, actionErr string, foreground color.Color) string {
-	content = appendStatusRows(content, actionErr, message)
+	if actionErr != "" {
+		content = append(content, warningStyle.Render(actionErr))
+	} else if message != "" {
+		content = append(content, ui.GreenStyle.Render(message))
+	}
 	return ui.PanelStyle(foreground, focused).Width(width).Height(height).Render(lipgloss.JoinVertical(lipgloss.Left, content...))
 }
 
@@ -299,23 +304,7 @@ func servicePanelWidth(total, gap int) int {
 	if total >= 118 {
 		return (total - (int(servicePanelCount)-1)*gap) / int(servicePanelCount)
 	}
-	return adaptivePanelWidth(total, gap, 28, 48)
-}
-func adaptivePanelWidth(total, gap, minimum, maximum int) int {
-	columns := max(1, (total+gap)/(minimum+gap))
-	return min(max((total-(columns-1)*gap)/columns, minimum), maximum)
-}
-
-// truncMiddle keeps a path on a single panel line by eliding its middle with
-// an ellipsis once it exceeds the available width, so labels never orphan onto
-// a wrapped line beneath them.
-func truncMiddle(path string, width int) string {
-	runes := []rune(path)
-	if width <= 1 || len(runes) <= width {
-		return path
-	}
-	head := (width - 1) / 2
-	return string(runes[:head]) + "…" + string(runes[len(runes)-(width-1-head):])
+	return tuikit.AdaptiveWidth(total, gap, 28, 48)
 }
 
 func shortPath(path string) string {

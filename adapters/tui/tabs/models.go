@@ -13,17 +13,16 @@ import (
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/antonikliment/tuikit"
 )
 
 type ModelsTab struct {
-	presetTable       table.Model
-	modelTable        table.Model
-	focusModels       bool
-	message           string
-	err               string
-	pendingDeletePath string
-	pendingCleanup    string
-	keys              KeyMap
+	presetTable  table.Model
+	modelTable   table.Model
+	focusModels  bool
+	presetStatus tuikit.Status
+	modelStatus  tuikit.Status
+	keys         KeyMap
 }
 
 type presetStartRequestMsg struct{ name string }
@@ -52,7 +51,7 @@ func (t *ModelsTab) setRows(snapshot dashboardSnapshot) {
 	t.presetTable.SetRows(presetRows)
 	modelRows := make([]table.Row, 0, len(snapshot.localModels))
 	for _, model := range snapshot.localModels {
-		modelRows = append(modelRows, table.Row{model.GetFilename(), formatBytes(model.GetSizeBytes()), modelUse(model)})
+		modelRows = append(modelRows, table.Row{model.GetFilename(), tuikit.FormatBytes(model.GetSizeBytes()), modelUse(model)})
 	}
 	t.modelTable.SetRows(modelRows)
 }
@@ -88,7 +87,8 @@ func (t *ModelsTab) Update(msg tea.Msg, snapshot dashboardSnapshot) tea.Cmd {
 		t.focusModels = true
 	}
 	if bindkey.Matches(key, t.keys.NextPanel) || bindkey.Matches(key, t.keys.PreviousPanel) {
-		t.focusModels, t.pendingDeletePath = !t.focusModels, ""
+		t.focusModels = !t.focusModels
+		t.modelStatus.Disarm()
 		return nil
 	}
 	if t.focusModels {
@@ -106,17 +106,17 @@ func (t *ModelsTab) updatePresets(key tea.KeyPressMsg, snapshot dashboardSnapsho
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
 		t.presetTable.MoveUp(1)
-		t.pendingCleanup, t.message, t.err = "", "", ""
+		t.presetStatus.Clear()
 	case bindkey.Matches(key, t.keys.Down):
 		t.presetTable.MoveDown(1)
-		t.pendingCleanup, t.message, t.err = "", "", ""
+		t.presetStatus.Clear()
 	case key.String() == "esc":
-		t.pendingCleanup = ""
+		t.presetStatus.Disarm()
 	case (key.String() == "d" || key.String() == "y") && presetUnavailable(&presets[sel]):
 		return t.cleanupSelected(&presets[sel], key.String() == "y")
 	case bindkey.Matches(key, t.keys.RunAction) && !presetRunning(snapshot.runtime, presets[sel].Name):
 		if presetUnavailable(&presets[sel]) {
-			t.err = presets[sel].SourceError
+			t.presetStatus.SetError(presets[sel].SourceError)
 			return nil
 		}
 		name := presets[sel].Name
@@ -130,58 +130,32 @@ func (t *ModelsTab) updateModels(key tea.KeyPressMsg, models []*controlv1.LocalM
 	switch {
 	case bindkey.Matches(key, t.keys.Up):
 		t.modelTable.MoveUp(1)
-		t.pendingDeletePath = ""
+		t.modelStatus.Disarm()
 	case bindkey.Matches(key, t.keys.Down):
 		t.modelTable.MoveDown(1)
-		t.pendingDeletePath = ""
+		t.modelStatus.Disarm()
 	case key.String() == "esc":
-		t.pendingDeletePath = ""
+		t.modelStatus.Disarm()
 	case (key.String() == "d" || key.String() == "y") && len(models) > 0:
 		return t.deleteSelected(models[sel], key.String() == "y")
 	}
 	return nil
 }
 
-// applyResult sets *msg to okMsg and clears *errField, or clears *msg and
-// records err.Error() in *errField.
-func applyResult(err error, msg, errField *string, okMsg string) {
-	*msg, *errField = okMsg, ""
-	if err != nil {
-		*msg, *errField = "", err.Error()
-	}
-}
-
 func (t *ModelsTab) setResult(result presetStartResultMsg) {
-	applyResult(result.err, &t.message, &t.err, "preset started")
+	t.presetStatus.SetResult(result.err, "preset started")
 }
 
 func (t *ModelsTab) setDeleteResult(result modelDeleteResultMsg) {
-	t.pendingDeletePath = ""
-	applyResult(result.err, &t.message, &t.err, "model deleted")
+	t.modelStatus.SetResult(result.err, "model deleted")
 }
 
 func (t *ModelsTab) setCleanupResult(result presetCleanupResultMsg) {
-	t.pendingCleanup = ""
-	applyResult(result.err, &t.message, &t.err, "preset cleaned up")
-}
-
-// confirmPending arms *pending (and clears msg/errField) on the first
-// press, and fires cmd once the same target is confirmed on a second press
-// ("press again to confirm").
-func confirmPending(pending, msg, errField *string, target string, confirm bool, fire func() tea.Cmd) tea.Cmd {
-	if *pending != target {
-		if confirm {
-			return nil
-		}
-		*pending, *msg, *errField = target, "", ""
-		return nil
-	}
-	*pending = ""
-	return fire()
+	t.presetStatus.SetResult(result.err, "preset cleaned up")
 }
 
 func (t *ModelsTab) cleanupSelected(preset *presetView, confirm bool) tea.Cmd {
-	return confirmPending(&t.pendingCleanup, &t.message, &t.err, preset.Name, confirm, func() tea.Cmd {
+	return t.presetStatus.Confirm(preset.Name, confirm, func() tea.Cmd {
 		return func() tea.Msg { return presetCleanupRequestMsg{name: preset.Name} }
 	})
 }
@@ -191,7 +165,7 @@ func (t *ModelsTab) deleteSelected(model *controlv1.LocalModel, confirm bool) te
 	if path == "" {
 		return nil
 	}
-	return confirmPending(&t.pendingDeletePath, &t.message, &t.err, path, confirm, func() tea.Cmd {
+	return t.modelStatus.Confirm(path, confirm, func() tea.Cmd {
 		return func() tea.Msg { return modelDeleteRequestMsg{path: path} }
 	})
 }
@@ -240,10 +214,10 @@ func (t *ModelsTab) presetPane(snapshot dashboardSnapshot) string {
 		return ui.MutedStyle.Render("No model presets configured")
 	}
 	rows := []string{t.presetTable.View()}
-	if t.pendingCleanup != "" {
-		rows = append(rows, warningStyle.Render("Cleanup "+t.pendingCleanup+" and its default/autostart references? Press d or y to confirm, esc to cancel"))
+	if pending := t.presetStatus.Pending(); pending != "" {
+		rows = append(rows, warningStyle.Render("Cleanup "+pending+" and its default/autostart references? Press d or y to confirm, esc to cancel"))
 	} else if !t.focusModels {
-		rows = appendStatusRows(rows, t.err, t.message)
+		rows = t.presetStatus.AppendRows(ui.Theme(), rows)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
@@ -259,7 +233,7 @@ func (t *ModelsTab) modelPane(snapshot dashboardSnapshot) string {
 	if warning := t.pendingDeleteWarning(snapshot.localModels); warning != "" {
 		rows = append(rows, warningStyle.Render(warning))
 	} else {
-		rows = appendStatusRows(rows, t.err, t.message)
+		rows = t.modelStatus.AppendRows(ui.Theme(), rows)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
@@ -278,21 +252,9 @@ func (t *ModelsTab) selectedModel(models []*controlv1.LocalModel) *controlv1.Loc
 	return models[min(t.modelTable.Cursor(), len(models)-1)]
 }
 
-// appendStatusRows appends a rendered error or (if no error) success row,
-// if either is set.
-func appendStatusRows(rows []string, err, message string) []string {
-	if err != "" {
-		return append(rows, warningStyle.Render(err))
-	}
-	if message != "" {
-		return append(rows, ui.GreenStyle.Render(message))
-	}
-	return rows
-}
-
 func (t *ModelsTab) pendingDeleteWarning(models []*controlv1.LocalModel) string {
 	for _, model := range models {
-		if model.GetPath() == t.pendingDeletePath {
+		if model.GetPath() == t.modelStatus.Pending() {
 			if len(model.GetModelPathPresets()) > 0 {
 				return "Delete model and Presets " + strings.Join(model.GetModelPathPresets(), ", ") + "? Press d or y to confirm, esc to cancel"
 			}
@@ -305,17 +267,12 @@ func (t *ModelsTab) pendingDeleteWarning(models []*controlv1.LocalModel) string 
 	return ""
 }
 
-// emptyDetail renders the placeholder panel shown when no row is selected.
-func emptyDetail(width, height int, accent color.Color, msg string) string {
-	return ui.PanelStyle(accent, false).Width(width).Height(height).Render(ui.MutedStyle.Render(msg))
-}
-
 // presetDetail fills the space below the list with the selected preset so
 // the tab is no longer mostly empty, surfacing the full model path and the
 // action that applies to its current state.
 func presetDetail(width, height int, accent color.Color, preset *presetView, runtime *controlv1.RuntimeStatus) string {
 	if preset == nil {
-		return emptyDetail(width, height, accent, "Select a preset to see details")
+		return ui.EmptyDetail(accent, width, height, "Select a preset to see details")
 	}
 	state, stateColor, action := "Stopped", ui.Muted, ui.GreenStyle.Render("Enter: start preset")
 	if presetUnavailable(preset) {
@@ -326,10 +283,10 @@ func presetDetail(width, height int, accent color.Color, preset *presetView, run
 	rows := []string{
 		ui.StatusTitle(preset.Name, state, accent, stateColor, width),
 		ui.Field("Model", presetModel(preset)),
-		ui.Field("Path", truncMiddle(preset.Model, width-12)),
+		ui.Field("Path", tuikit.TruncMiddle(preset.Model, width-12)),
 	}
 	if presetUnavailable(preset) {
-		rows = append(rows, ui.Field("Reason", truncMiddle(preset.SourceError, width-12)))
+		rows = append(rows, ui.Field("Reason", tuikit.TruncMiddle(preset.SourceError, width-12)))
 	}
 	if height >= 8 {
 		rows = append(rows, ui.Rule(width), action)
@@ -341,16 +298,16 @@ func presetDetail(width, height int, accent color.Color, preset *presetView, run
 
 func localModelDetail(width, height int, accent color.Color, model *controlv1.LocalModel) string {
 	if model == nil {
-		return emptyDetail(width, height, accent, "Select a local model to see details")
+		return ui.EmptyDetail(accent, width, height, "Select a local model to see details")
 	}
 	usedBy, stateColor := "-", ui.Muted
 	if len(model.GetUsedByPresets()) > 0 {
 		usedBy, stateColor = strings.Join(model.GetUsedByPresets(), ", "), ui.Yellow
 	}
 	rows := []string{
-		ui.StatusTitle(model.GetFilename(), formatBytes(model.GetSizeBytes()), accent, stateColor, width),
-		ui.Field("Path", truncMiddle(model.GetPath(), width-12)),
-		ui.Field("Used by", truncMiddle(usedBy, width-12)),
+		ui.StatusTitle(model.GetFilename(), tuikit.FormatBytes(model.GetSizeBytes()), accent, stateColor, width),
+		ui.Field("Path", tuikit.TruncMiddle(model.GetPath(), width-12)),
+		ui.Field("Used by", tuikit.TruncMiddle(usedBy, width-12)),
 	}
 	if height >= 7 {
 		rows = append(rows, ui.Rule(width), ui.MutedStyle.Render("d: delete model"))
@@ -378,21 +335,6 @@ func presetRunning(status *controlv1.RuntimeStatus, preset string) bool {
 	return false
 }
 
-func formatBytes(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-	value, suffixes := float64(size), []string{"KiB", "MiB", "GiB", "TiB"}
-	for _, suffix := range suffixes {
-		value /= unit
-		if value < unit {
-			return fmt.Sprintf("%.1f %s", value, suffix)
-		}
-	}
-	return fmt.Sprintf("%.1f PiB", value/unit)
-}
-
 func modelHelp(keys KeyMap) string {
-	return helpLine(keys.Up, keys.RunAction, keys.NextPanel, keys.ServicesTab, keys.Refresh, keys.Quit)
+	return tuikit.HelpLine(keys.Up, keys.RunAction, keys.NextPanel, keys.ServicesTab, keys.Refresh, keys.Quit)
 }

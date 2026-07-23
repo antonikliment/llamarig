@@ -33,11 +33,14 @@ func TestModelsTabDoesNotStartRunningPreset(t *testing.T) {
 func TestModelsTabShowsAndConfirmsUnavailablePresetCleanup(t *testing.T) {
 	tab := NewModelsTab()
 	snapshot := dashboardSnapshot{presets: []presetView{{Name: "broken", Model: "/missing.gguf", SourceStatus: "unavailable", SourceError: "source missing"}}}
-	if cmd := tab.Update(keyMsg("enter"), snapshot); cmd != nil || tab.err != "source missing" {
-		t.Fatalf("start cmd=%v err=%q", cmd, tab.err)
+	if cmd := tab.Update(keyMsg("enter"), snapshot); cmd != nil {
+		t.Fatalf("start cmd=%v", cmd)
 	}
-	if cmd := tab.Update(keyMsg("d"), snapshot); cmd != nil || tab.pendingCleanup != "broken" {
-		t.Fatalf("first cleanup cmd=%v pending=%q", cmd, tab.pendingCleanup)
+	if view := ansi.Strip(tab.View(120, 20, snapshot)); !strings.Contains(view, "source missing") {
+		t.Fatalf("expected source error in view:\n%s", view)
+	}
+	if cmd := tab.Update(keyMsg("d"), snapshot); cmd != nil || tab.presetStatus.Pending() != "broken" {
+		t.Fatalf("first cleanup cmd=%v pending=%q", cmd, tab.presetStatus.Pending())
 	}
 	cmd := tab.Update(keyMsg("y"), snapshot)
 	request, ok := cmd().(presetCleanupRequestMsg)
@@ -52,11 +55,14 @@ func TestModelsTabShowsAndConfirmsUnavailablePresetCleanup(t *testing.T) {
 func TestModelsTabNavigationCancelsPendingCleanup(t *testing.T) {
 	tab := NewModelsTab()
 	snapshot := dashboardSnapshot{presets: []presetView{{Name: "first"}, {Name: "broken", SourceStatus: "unavailable"}}}
-	tab.Update(keyMsg("down"), snapshot) // cursor -> 1
-	tab.pendingCleanup, tab.message, tab.err = "broken", "stale success", "stale error"
+	tab.Update(keyMsg("down"), snapshot) // cursor -> 1 (broken, unavailable)
+	tab.Update(keyMsg("d"), snapshot)    // arm cleanup for "broken"
+	if tab.presetStatus.Pending() != "broken" {
+		t.Fatalf("expected armed cleanup, pending=%q", tab.presetStatus.Pending())
+	}
 	tab.Update(keyMsg("up"), snapshot)
-	if tab.presetTable.Cursor() != 0 || tab.pendingCleanup != "" || tab.message != "" || tab.err != "" {
-		t.Fatalf("cursor=%d pending=%q message=%q err=%q", tab.presetTable.Cursor(), tab.pendingCleanup, tab.message, tab.err)
+	if tab.presetTable.Cursor() != 0 || tab.presetStatus.Pending() != "" {
+		t.Fatalf("cursor=%d pending=%q", tab.presetTable.Cursor(), tab.presetStatus.Pending())
 	}
 }
 
