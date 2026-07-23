@@ -8,7 +8,7 @@ require (
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.2
 	connectrpc.com/connect v1.20.0
-	github.com/antonikliment/tuikit v0.2.0
+	github.com/antonikliment/tuikit v0.2.1
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/shirou/gopsutil/v4 v4.26.4
