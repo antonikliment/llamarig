@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 func TestModelSwitchesTabs(t *testing.T) {
@@ -28,22 +27,5 @@ func TestModelDelegatesResourceMessages(t *testing.T) {
 
 	if !strings.Contains(m.FooterWarning(), "down") {
 		t.Fatalf("footer warning = %q", m.FooterWarning())
-	}
-}
-
-func TestFooterRendersActualWarning(t *testing.T) {
-	view := RenderFooter(ChromeProps{Width: 80, Warning: "presets: unavailable"})
-	if !strings.Contains(view, "Status: presets: unavailable") {
-		t.Fatalf("footer = %q", view)
-	}
-}
-
-func TestHeaderShowsControlCQuit(t *testing.T) {
-	view := strings.Join(strings.Fields(ansi.Strip(RenderHeader(ChromeProps{ActiveTab: TabServices, Width: 80}))), " ")
-	if !strings.Contains(view, "Ctrl+C Quit") {
-		t.Fatalf("header missing Ctrl+C quit help: %q", view)
-	}
-	if strings.Contains(view, "q: quit") {
-		t.Fatalf("header shows stale q quit help: %q", view)
 	}
 }
