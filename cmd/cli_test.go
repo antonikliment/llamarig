@@ -17,6 +17,21 @@ import (
 	"llamarig/core/rpc/gen/v1/controlv1connect"
 )
 
+func TestLlamaInstallCommands(t *testing.T) {
+	root := NewRootCommand()
+	for _, args := range [][]string{{"llama", "install"}, {"llama", "upgrade"}} {
+		command, remaining, err := root.Find(args)
+		if err != nil || len(remaining) != 0 {
+			t.Fatalf("find %v: command=%v remaining=%v error=%v", args, command, remaining, err)
+		}
+		for _, flag := range []string{"backend", "source", "jobs"} {
+			if command.Flags().Lookup(flag) == nil {
+				t.Errorf("%v lacks --%s", args, flag)
+			}
+		}
+	}
+}
+
 func TestCLICommandParsesInterspersedFlags(t *testing.T) {
 	fake := &fakeCLIControl{}
 	root := NewRootCommand()

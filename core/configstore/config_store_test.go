@@ -179,6 +179,26 @@ func TestSetStartupServicesAddsMissingKeyAndValidates(t *testing.T) {
 	}
 }
 
+func TestSetRouterExecutableOnlyReplacesManagedValue(t *testing.T) {
+	for _, test := range []struct {
+		current, replace, want string
+	}{
+		{config.DefaultLlamaExecutable, "", "/managed/new"},
+		{"/managed/old", "/managed/old", "/managed/new"},
+		{"/custom/server", "/managed/old", "/custom/server"},
+	} {
+		path := writeConfig(t, "router:\n  executable: "+test.current+"\n")
+		store := NewFileStore(path, DefaultLimitBytes)
+		if _, err := store.SetRouterExecutable(context.Background(), "/managed/new", test.replace); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := store.Read(context.Background())
+		if err != nil || cfg.Router.Executable != test.want {
+			t.Errorf("current %q: got %q, %v; want %q", test.current, cfg.Router.Executable, err, test.want)
+		}
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()

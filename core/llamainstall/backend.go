@@ -92,9 +92,10 @@ func (i *installer) releaseAsset(rel release, backend Backend) (asset, error) {
 	if backend != BackendCPU && backend != BackendMetal {
 		part = "-" + string(backend)
 	}
-	suffix := fmt.Sprintf("-bin-%s%s-%s.tar.gz", platform, part, arch)
+	name := fmt.Sprintf("llama-%s-bin-%s%s-%s.tar.gz", rel.TagName, platform, part, arch)
 	for _, candidate := range rel.Assets {
-		if strings.HasPrefix(candidate.Name, "llama-"+rel.TagName) && strings.HasSuffix(candidate.Name, suffix) {
+		matchesROCm := backend == BackendROCm && strings.HasPrefix(candidate.Name, strings.TrimSuffix(name, arch+".tar.gz")) && strings.HasSuffix(candidate.Name, "-"+arch+".tar.gz")
+		if candidate.Name == name || matchesROCm {
 			return candidate, nil
 		}
 	}

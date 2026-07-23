@@ -13,7 +13,7 @@ A local control plane for [llama.cpp](https://github.com/ggml-org/llama.cpp) ser
 
 ## Prerequisites
 
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) built, with `llama-server` on your `PATH` (or note its full path — setup will ask for it). The [Docker setup](#docker) bundles `llama-server`, so it needs no separate llama.cpp install.
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) with `llama-server` on your `PATH`, or let the setup wizard install a managed copy. The [Docker setup](#docker) bundles `llama-server`, so it needs no separate llama.cpp install.
 
 Optional: an NVIDIA GPU with `nvidia-smi` for GPU telemetry in the System tab/API.
 
@@ -64,6 +64,30 @@ Release archives contain the LlamaRig binary, embedded web UI, README, and
 license. `llama-server` remains a separate prerequisite and must be available on
 `PATH` or selected during setup.
 
+### Managed llama.cpp
+
+On Linux and macOS (amd64 or arm64), LlamaRig can install the latest upstream
+`llama-server` and point a default or previously managed config at it:
+
+```bash
+llamarig llama install
+llamarig llama upgrade
+```
+
+The installer auto-selects Metal on macOS. On Linux it checks CUDA, ROCm, then
+Vulkan before falling back to CPU. Upstream does not publish a Linux CUDA
+archive, so CUDA requires `--source`; Vulkan or Docker are the prebuilt
+alternatives. Override detection with `--backend cpu|cuda|rocm|vulkan|metal`,
+or force any supported backend to compile with `--source -j 4`. Source builds
+require CMake, a C/C++ toolchain, Node.js/npm for llama.cpp's embedded UI, and
+the selected backend SDK; the build inherits standard compiler and CMake
+environment variables.
+
+Downloads are verified against the size and SHA-256 digest published by
+GitHub. Installs live under `~/.llamarig/llama.cpp`; one previous install is
+retained. `upgrade` inherits the prior backend/source policy unless flags
+override it. A custom `router.executable` is never overwritten.
+
 ### Docker
 
 The Docker image bundles `llama-server` (from the official
@@ -108,7 +132,7 @@ cd webui && pnpm install && pnpm run build && cd ..
 go run .
 ```
 
-The first run (in an interactive terminal) walks you through a setup wizard: listen address, bearer token env var, `llama-server` path (checked against `PATH`), models directory, router port, and which services should start automatically (`control`, `web`, or both — see below). It writes `~/.llamarig/config.yaml` and `~/.llamarig/models.ini`.
+The first run (in an interactive terminal) walks you through a setup wizard: listen address, bearer token env var, `llama-server` path (checked against `PATH`), models directory, router port, and which services should start automatically (`control`, `web`, or both — see below). If `llama-server` is missing, setup offers to install a managed copy. It writes `~/.llamarig/config.yaml` and `~/.llamarig/models.ini`.
 
 `go run .` (or the built `llamarig` binary with no arguments) opens the **TUI** — the entrypoint for interactive use. The TUI auto-starts whichever services you configured in setup and shows a status notice while it does. From the TUI Services tab you can also start/stop services manually, and from the Models tab you can start the `default` preset once you've put a `.gguf` model in your models directory (or downloaded one through the web GUI).
 

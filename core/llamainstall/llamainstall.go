@@ -21,9 +21,8 @@ import (
 	"llamarig/platform/filedoc"
 )
 
-const latestReleaseURL = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
-
 var (
+	latestReleaseURL    = "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest"
 	ErrNoManagedInstall = errors.New("no managed llama.cpp install")
 	ErrNoPrebuilt       = errors.New("no matching llama.cpp prebuilt")
 	httpClient          = &http.Client{Timeout: 30 * time.Minute}
