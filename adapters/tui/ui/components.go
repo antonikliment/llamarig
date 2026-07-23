@@ -42,6 +42,10 @@ func StatusTitle(title, status string, titleColor, statusColor color.Color, widt
 
 func Field(label, value string) string { return tuikit.Field(label, value) }
 
+// Flow lays blocks out left-to-right, wrapping to a new row when the next block
+// would overflow width, separated by gap spaces.
+func Flow(width, gap int, blocks []string) string { return tuikit.Flow(width, gap, blocks) }
+
 func Rule(width int) string { return theme.Rule(width) }
 
 func VerticalSlice(content string, offset, height int) string {
