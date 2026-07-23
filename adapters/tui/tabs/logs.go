@@ -14,10 +14,9 @@ import (
 	"llamarig/platform/audit"
 
 	bindkey "charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/antonikliment/tuikit"
 )
 
 const maxLogLines = 2000
@@ -101,53 +100,39 @@ const (
 )
 
 type LogsTab struct {
-	focus  logPane
-	vp     [paneCount]viewport.Model
-	follow [paneCount]bool
-	input  [paneCount]textinput.Model
+	focus logPane
+	view  [paneCount]tuikit.SearchView
 }
 
 func NewLogsTab() LogsTab {
-	t := LogsTab{follow: [paneCount]bool{true, true}}
-	for i := range t.input {
-		t.input[i] = textinput.New()
-		t.vp[i] = viewport.New()
+	t := LogsTab{}
+	for i := range t.view {
+		t.view[i] = tuikit.NewSearchView()
 	}
 	return t
 }
 
-func (t *LogsTab) IsSearching() bool { return t.input[t.focus].Focused() }
+func (t *LogsTab) IsSearching() bool { return t.view[t.focus].Searching() }
 
 func (t *LogsTab) Update(msg tea.Msg, keys KeyMap) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return
 	}
-	if t.input[t.focus].Focused() {
-		if s := key.String(); s == "enter" || s == "esc" {
-			t.input[t.focus].Blur()
-		} else {
-			t.input[t.focus], _ = t.input[t.focus].Update(key)
+	// Panel switching is the LogsTab's own concern; scrolling, search focus, and
+	// clearing are delegated to the focused pane's SearchView. Only intercept
+	// Tab/Shift+Tab while not searching, so those keys type into the query box.
+	if !t.view[t.focus].Searching() {
+		switch {
+		case bindkey.Matches(key, keys.NextPanel):
+			t.focus = (t.focus + 1) % paneCount
+			return
+		case bindkey.Matches(key, keys.PreviousPanel):
+			t.focus = (t.focus + paneCount - 1) % paneCount
+			return
 		}
-		return
 	}
-	switch {
-	case bindkey.Matches(key, keys.NextPanel):
-		t.focus = (t.focus + 1) % paneCount
-	case bindkey.Matches(key, keys.PreviousPanel):
-		t.focus = (t.focus + paneCount - 1) % paneCount
-	case key.String() == "/":
-		t.input[t.focus].Focus()
-	case key.String() == "esc":
-		t.input[t.focus].SetValue("")
-		t.follow[t.focus] = true
-	case bindkey.Matches(key, keys.Up):
-		t.vp[t.focus].ScrollUp(1)
-		t.follow[t.focus] = t.vp[t.focus].AtBottom()
-	case bindkey.Matches(key, keys.Down):
-		t.vp[t.focus].ScrollDown(1)
-		t.follow[t.focus] = t.vp[t.focus].AtBottom()
-	}
+	t.view[t.focus].Update(msg)
 }
 
 // logPaneMeta describes each log as a switchable sub-tab.
@@ -163,27 +148,23 @@ func (t *LogsTab) View(width, height int, snapshot dashboardSnapshot) string {
 	const helpHeight = 3
 	tabbedH := max(6, height-helpHeight)
 
-	lines := [paneCount][]string{
-		paneDaemon: renderDaemonLog(filterDaemonLog(snapshot.daemonLog, t.input[paneDaemon].Value())),
-		paneLlama:  renderLlamaLog(filterLlamaLog(snapshot.llamaLog, t.input[paneLlama].Value())),
-	}
+	// Feed each pane its full rendered log; the SearchView applies the live
+	// query (matching visible text) and tracks scroll/follow itself.
+	t.view[paneDaemon].SetLines(renderDaemonLog(snapshot.daemonLog))
+	t.view[paneLlama].SetLines(renderLlamaLog(snapshot.llamaLog))
 
 	titles := make([]string, paneCount)
 	accents := make([]color.Color, paneCount)
 	for pane := logPane(0); pane < paneCount; pane++ {
-		titles[pane] = fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(lines[pane]))
+		titles[pane] = fmt.Sprintf("%s (%d)", logPaneMeta[pane].title, len(t.view[pane].Filtered()))
 		accents[pane] = logPaneMeta[pane].accent
 	}
 
-	vp := &t.vp[t.focus]
-	vp.SetWidth(width - 4)
-	vp.SetHeight(max(1, tabbedH-4)) // tab row (2) + notch line (1) + box bottom border (1)
-	vp.SetContent(strings.Join(lines[t.focus], "\n"))
-	if t.follow[t.focus] {
-		vp.GotoBottom()
-	}
+	// SearchView owns the viewport sizing: tab row (2) + notch line (1) + box
+	// bottom border (1) sit outside it, matching the TabbedPanel chrome.
+	content := t.view[t.focus].View(width-4, max(1, tabbedH-4))
 
-	tabbed := ui.TabbedPanel(titles, accents, int(t.focus), width, tabbedH, vp.View())
+	tabbed := ui.TabbedPanel(titles, accents, int(t.focus), width, tabbedH, content)
 	body := lipgloss.JoinVertical(lipgloss.Left, tabbed, logsHelp(width, t))
 	return lipgloss.NewStyle().MaxHeight(height).Render(body)
 }
@@ -198,40 +179,13 @@ var (
 
 func logsHelp(width int, t *LogsTab) string {
 	status := helpLine(logSwitchKey, logScrollKey, logSearchKey, logClearKey, logTabKey)
-	if t.input[t.focus].Focused() {
-		status = ui.MutedStyle.Render("Search: " + t.input[t.focus].View() + "  (Enter/Esc to finish)")
-	} else if query := t.input[t.focus].Value(); query != "" {
+	view := &t.view[t.focus]
+	if view.Searching() {
+		status = ui.MutedStyle.Render("Search: " + view.InputView() + "  (Enter/Esc to finish)")
+	} else if query := view.Query(); query != "" {
 		status = ui.MutedStyle.Render("Search: " + query + "  (Esc to clear)")
 	}
 	return ui.PanelStyle(ui.Muted, false).Width(width).Render(status)
-}
-
-func filterLlamaLog(lines []string, query string) []string {
-	if query == "" {
-		return lines
-	}
-	out := make([]string, 0, len(lines))
-	needle := strings.ToLower(query)
-	for _, line := range lines {
-		if strings.Contains(strings.ToLower(line), needle) {
-			out = append(out, line)
-		}
-	}
-	return out
-}
-
-func filterDaemonLog(entries []zapEntry, query string) []zapEntry {
-	if query == "" {
-		return entries
-	}
-	needle := strings.ToLower(query)
-	out := make([]zapEntry, 0, len(entries))
-	for _, entry := range entries {
-		if strings.Contains(strings.ToLower(entry.Msg+" "+entry.Caller+" "+entry.Stacktrace+" "+renderFields(entry.Fields)), needle) {
-			out = append(out, entry)
-		}
-	}
-	return out
 }
 
 func renderDaemonLog(entries []zapEntry) []string {
