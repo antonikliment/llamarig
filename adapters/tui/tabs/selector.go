@@ -120,20 +120,14 @@ func autostartNotice(msg autostartResultMsg) string {
 	return strings.Join(parts, "; ")
 }
 
+// updateKey dispatches a key to the active sub-tab. Page switching (digits
+// 1-9) is owned by the tuikit.Frame wrapping this Model (see tabs/page.go);
+// Model only still handles the Refresh binding itself, gated the same way
+// Frame gates page-switch digits: suppressed while the Logs pane is searching,
+// so 'r' can be typed into a search query instead of triggering a refresh.
 func (m *Model) updateKey(msg tea.KeyPressMsg) tea.Cmd {
-	if m.active != TabLogs || !m.logs.IsSearching() {
-		switch {
-		case key.Matches(msg, m.keys.ServicesTab):
-			m.active = TabServices
-		case key.Matches(msg, m.keys.ModelsTab):
-			m.active = TabModels
-		case key.Matches(msg, m.keys.SystemTab):
-			m.active = TabSystem
-		case key.Matches(msg, m.keys.LogsTab):
-			m.active = TabLogs
-		case key.Matches(msg, m.keys.Refresh):
-			return m.refresh()
-		}
+	if (m.active != TabLogs || !m.logs.IsSearching()) && key.Matches(msg, m.keys.Refresh) {
+		return m.refresh()
 	}
 	switch m.active {
 	case TabServices:
