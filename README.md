@@ -83,8 +83,10 @@ require CMake, a C/C++ toolchain, Node.js/npm for llama.cpp's embedded UI, and
 the selected backend SDK; the build inherits standard compiler and CMake
 environment variables.
 
-Downloads are verified against the size and SHA-256 digest published by
-GitHub. Installs live under `~/.llamarig/llama.cpp`; one previous install is
+Prebuilt downloads are verified against the size and SHA-256 digest published
+by GitHub; source tarballs are fetched over HTTPS but not digest-pinned. The
+built or downloaded `llama-server` is then run once (`--version`) before it is
+activated. Installs live under `~/.llamarig/llama.cpp`; one previous install is
 retained. `upgrade` inherits the prior backend/source policy unless flags
 override it. A custom `router.executable` is never overwritten.
 

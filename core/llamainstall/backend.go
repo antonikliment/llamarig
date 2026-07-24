@@ -1,6 +1,7 @@
 package llamainstall
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -58,10 +59,7 @@ func (i *installer) latest(ctx context.Context) (release, error) {
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("User-Agent", "llamarig")
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		token = os.Getenv("GH_TOKEN")
-	}
+	token := cmp.Or(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}

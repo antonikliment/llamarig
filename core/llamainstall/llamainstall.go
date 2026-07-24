@@ -91,20 +91,16 @@ func Detect(ctx context.Context) (Backend, error) {
 	return i.detect(ctx), nil
 }
 
-func Install(ctx context.Context, opts Options) (string, error) {
-	i, err := newInstaller()
-	if err != nil {
-		return "", err
-	}
-	return i.execute(ctx, opts, false)
-}
+func Install(ctx context.Context, opts Options) (string, error) { return perform(ctx, opts, false) }
 
-func Upgrade(ctx context.Context, opts Options) (string, error) {
+func Upgrade(ctx context.Context, opts Options) (string, error) { return perform(ctx, opts, true) }
+
+func perform(ctx context.Context, opts Options, upgrade bool) (string, error) {
 	i, err := newInstaller()
 	if err != nil {
 		return "", err
 	}
-	return i.execute(ctx, opts, true)
+	return i.execute(ctx, opts, upgrade)
 }
 
 func (i *installer) output(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -192,7 +188,11 @@ func (i *installer) installLatest(ctx context.Context, opts Options, current sta
 }
 
 func (i *installer) activate(ctx context.Context, opts Options, current state, rel release, policy, backend Backend, source bool, payload, stagedExe string) (string, error) {
-	final := filepath.Join(i.root, rel.TagName, fmt.Sprintf("%s-%s-%s-%s", i.goos, i.goarch, backend, mode(source)))
+	kind := "prebuilt"
+	if source {
+		kind = "source"
+	}
+	final := filepath.Join(i.root, rel.TagName, fmt.Sprintf("%s-%s-%s-%s", i.goos, i.goarch, backend, kind))
 	if !managedPath(i.root, final) {
 		return "", fmt.Errorf("unsafe install path %q", final)
 	}
@@ -212,8 +212,8 @@ func (i *installer) activate(ctx context.Context, opts Options, current state, r
 	if err := i.writeState(current); err != nil {
 		return "", err
 	}
-	if oldPrevious != nil && (previous == nil || oldPrevious.Directory != previous.Directory) {
-		i.removeManaged(oldPrevious.Directory)
+	if oldPrevious != nil && (previous == nil || oldPrevious.Directory != previous.Directory) && managedPath(i.root, oldPrevious.Directory) {
+		_ = os.RemoveAll(oldPrevious.Directory)
 	}
 	return i.configure(ctx, previous, next)
 }
@@ -223,7 +223,7 @@ func (i *installer) normalize(opts *Options) error {
 		return fmt.Errorf("unsupported host %s/%s", i.goos, i.goarch)
 	}
 	if opts.Jobs < 0 {
-		return fmt.Errorf("jobs must be positive")
+		return fmt.Errorf("jobs must not be negative")
 	}
 	if opts.Jobs == 0 {
 		opts.Jobs = 4
@@ -313,12 +313,6 @@ func (i *installer) writeState(value state) error {
 	return err
 }
 
-func (i *installer) removeManaged(path string) {
-	if managedPath(i.root, path) {
-		_ = os.RemoveAll(path)
-	}
-}
-
 func managedPath(root, candidate string) bool {
 	rel, err := filepath.Rel(root, candidate)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
@@ -326,11 +320,4 @@ func managedPath(root, candidate string) bool {
 
 func validBackend(value Backend) bool {
 	return value == BackendAuto || value == BackendCPU || value == BackendCUDA || value == BackendROCm || value == BackendVulkan || value == BackendMetal
-}
-
-func mode(source bool) string {
-	if source {
-		return "source"
-	}
-	return "prebuilt"
 }
