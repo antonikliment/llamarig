@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"llamarig/config"
+	"llamarig/core/llamainstall"
 )
 
 // runForm runs a huh form and maps a user abort (ctrl+c/esc) to ErrCancelled.
@@ -75,11 +77,54 @@ func RunWizard(ctx context.Context, paths Paths) (Answers, error) {
 	}
 
 	normalizeAnswers(&answers, startup)
+	if !llamaExecutableResolves(answers.LlamaExecutable) {
+		executable, err := offerManagedLlama(ctx)
+		if err != nil {
+			return Answers{}, err
+		}
+		if executable != "" {
+			answers.LlamaExecutable = executable
+		}
+	}
 
 	if err := confirmSafety(ctx, answers); err != nil {
 		return Answers{}, err
 	}
 	return answers, nil
+}
+
+func offerManagedLlama(ctx context.Context) (string, error) {
+	install := true
+	form := huh.NewForm(huh.NewGroup(huh.NewConfirm().
+		Title("llama-server was not found. Install a managed llama.cpp now?").
+		Value(&install)))
+	if err := runForm(ctx, form); err != nil || !install {
+		return "", err
+	}
+	backend, err := llamainstall.Detect(ctx)
+	if err != nil {
+		return "", err
+	}
+	options := llamainstall.Options{Backend: llamainstall.BackendAuto, Progress: os.Stderr}
+	if runtime.GOOS == "linux" && backend == llamainstall.BackendCUDA {
+		choice := "source"
+		choiceForm := huh.NewForm(huh.NewGroup(huh.NewSelect[string]().
+			Title("CUDA has no upstream prebuilt. Choose an installation").
+			Options(
+				huh.NewOption("Build CUDA from source", "source"),
+				huh.NewOption("Use Vulkan prebuilt", "vulkan"),
+				huh.NewOption("Skip installation", "skip"),
+			).Value(&choice)))
+		if err := runForm(ctx, choiceForm); err != nil || choice == "skip" {
+			return "", err
+		}
+		options.Source = choice == "source"
+		if choice == "vulkan" {
+			options.Backend = llamainstall.BackendVulkan
+		}
+	}
+	result, err := llamainstall.Install(ctx, options)
+	return result, err
 }
 
 // tealStyles is huh's Charm theme with its fuchsia/pink accents recolored teal,

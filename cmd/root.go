@@ -23,6 +23,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(versionCommand())
 	rootCmd.AddCommand(downCommand)
 	rootCmd.AddCommand(logsCommand(config.ProjectName, true))
+	rootCmd.AddCommand(llamaCommand())
 	rootCmd.AddCommand(tuiCommand)
 	rootCmd.AddCommand(cli.Commands()...)
 

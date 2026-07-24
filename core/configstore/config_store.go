@@ -70,6 +70,30 @@ func (s *FileStore) SetStartupServices(ctx context.Context, services []string) (
 	})
 }
 
+// SetRouterExecutable updates router.executable while preserving unrelated YAML.
+func (s *FileStore) SetRouterExecutable(ctx context.Context, executable, replace string) (WriteResult, error) {
+	return s.mutateDocument(ctx, func(document *yaml.Node) bool {
+		root := documentRoot(document)
+		if root == nil {
+			return false
+		}
+		router := findOrCreateRouterNode(root, true)
+		current := mappingValue(router, "executable")
+		if current != nil && current.Value != config.DefaultLlamaExecutable && current.Value != replace {
+			return false
+		}
+		if current != nil && current.Value == executable {
+			return false
+		}
+		if current == nil {
+			router.Content = append(router.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "executable"}, &yaml.Node{})
+			current = router.Content[len(router.Content)-1]
+		}
+		current.Kind, current.Tag, current.Value = yaml.ScalarNode, "!!str", executable
+		return true
+	})
+}
+
 // mutateDocument applies mutate to the parsed config.yaml document and, when
 // it reports a change, validates and atomically rewrites the file preserving
 // comments and formatting.
